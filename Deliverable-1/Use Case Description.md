@@ -34,37 +34,35 @@
 | **Postconditions** | Success: time slot is reserved and confirmed by the user.<br>Exception: no reservation is created and the user is notified of failure. |
 
 
-# Use Case Descriptions — Campus Makerspace Management System
-
 ## 4. View History of Reservations
 
 | | |
 |---|---|
-| Use Case Name | View history of reservations |
-| Actors | User (primary)<br>Staff (primary) |
-| Preconditions | - User/Staff is authenticated in the system. |
-| Main Success Scenario | User wants to see their past and upcoming reservations.<br>1. User opens "My reservations".<br>2. System retrieves the reservations of this user.<br>3. System displays the list with equipment, date, time slot and status (upcoming, completed, cancelled).<br>4. User filters the list by date, equipment or status.<br>5. User selects a reservation.<br>6. System shows the reservation details. |
-| Extensions (Alternate Flows) | **Staff views reservations:**<br>1. Staff opens "All reservations";<br>2. System displays the reservations of all users;<br>3. Staff can filter by user or equipment.<br><br>**No reservations found:**<br>1. System shows the message "No reservations yet". |
-| Postconditions | Success: the reservation history is displayed (user sees only their own reservations, staff sees all).<br>Exception: an empty list is shown and the user is informed. |
+| **Use Case Name** | View history of reservations |
+| **Actors** | User (primary)<br>Staff (primary) |
+| **Preconditions** | - User/Staff is authenticated in the system;<br>- To view all reservations, Staff has staff rights. |
+| **Main Success Scenario** | User wants to see their past and upcoming reservations.<br>1. User opens "My reservations".<br>2. System retrieves the reservations of this user.<br>3. System displays the list with equipment, date, time slot and status (awaiting confirmation, confirmed, completed, cancelled).<br>4. User selects a reservation.<br>5. System shows the reservation details.<br><br>User may filter the list by date, equipment or status at any time. |
+| **Extensions (Alternate Flows)** | **Staff views reservations:**<br>1. Staff opens "All reservations";<br>2. System displays the reservations of all users;<br>3. Staff may filter by user or equipment.<br><br>**No reservations found:**<br>1. System shows the message "No reservations yet". |
+| **Postconditions** | Success: the reservation history is displayed (user sees only their own reservations, staff sees all).<br>If no reservations exist, an empty list is shown and the user is informed. |
 
 ## 5. View Equipment
 
 | | |
 |---|---|
-| Use Case Name | View equipment |
-| Actors | User (primary) |
-| Preconditions | - User is authenticated in the system. |
-| Main Success Scenario | User wants to see what equipment the makerspace offers.<br>1. User opens the equipment catalogue.<br>2. System displays the list of equipment with type, location and current status.<br>3. User filters the list by type (3D printer, laser cutter, electronics workstation).<br>4. User selects a machine.<br>5. System shows the machine details: description, rules of use and status. |
-| Extensions (Alternate Flows) | **No equipment matches the filter:**<br>1. System shows the message "No equipment found";<br>2. User changes or resets the filter.<br><br>**Machine is blocked:**<br>1. System marks the machine as "Blocked";<br>2. System shows the block reason and period. |
-| Postconditions | Success: the user has seen the equipment list and/or details of a machine.<br>Exception: the user is informed that no equipment was found. |
+| **Use Case Name** | View equipment |
+| **Actors** | User (primary) |
+| **Preconditions** | - User is authenticated in the system. |
+| **Main Success Scenario** | User wants to see what equipment the makerspace offers.<br>1. User opens the equipment catalogue.<br>2. System displays the list of equipment with type, location and current status.<br>3. User selects a machine.<br>4. System shows the machine details: description, rules of use and status.<br>5. User may proceed to "Track Availability" or "Reserve time slot".<br><br>User may filter the list by type (3D printer, laser cutter, electronics workstation) at any time. |
+| **Extensions (Alternate Flows)** | **No equipment matches the filter:**<br>1. System shows the message "No equipment found";<br>2. User changes or resets the filter.<br><br>**Machine is blocked:**<br>1. System marks the machine as "Blocked";<br>2. System shows the block reason and period. |
+| **Postconditions** | Success: the user has seen the equipment list and/or details of a machine.<br>Exception: the user is informed that no equipment was found. |
 
 ## 6. Track Availability
 
 | | |
 |---|---|
-| Use Case Name | Track availability |
-| Actors | User (primary) |
-| Preconditions | - User is authenticated in the system;<br>- The machine exists in the system. |
-| Main Success Scenario | User wants to know when a machine is free.<br>1. User selects a machine.<br>2. User selects a date.<br>3. System checks the machine status.<br>4. System retrieves the existing reservations for this date.<br>5. System displays a calendar with free and booked time slots.<br>6. User chooses another date to compare. |
-| Extensions (Alternate Flows) | **Machine is blocked:**<br>1. System shows all slots in the block period as unavailable;<br>2. System shows the block reason and expected end date.<br><br>**No free slots on the selected date:**<br>1. System shows the message "Fully booked";<br>2. System suggests the nearest date with free slots. |
-| Postconditions | Success: the user sees the up-to-date availability of the machine.<br>Exception: the user is informed that the machine is unavailable. |
+| **Use Case Name** | Track availability |
+| **Actors** | User (primary) |
+| **Preconditions** | - User is authenticated in the system;<br>- The machine exists in the system. |
+| **Main Success Scenario** | User wants to know when a machine is free.<br>1. User selects a machine.<br>2. User selects a date.<br>3. System checks the machine status.<br>4. System retrieves the existing reservations for this date.<br>5. System displays a calendar with free and booked time slots.<br><br>User may select another date to compare. |
+| **Extensions (Alternate Flows)** | **Machine is blocked:**<br>1. System shows all slots in the block period as unavailable;<br>2. System shows the block reason and block period.<br><br>**No free slots on the selected date:**<br>1. System shows the message "Fully booked";<br>2. System suggests the nearest free time slots. |
+| **Postconditions** | Success: the user sees the free and booked time slots of the machine for the selected date.<br>Exception: the user is informed that the machine is blocked or fully booked. |
