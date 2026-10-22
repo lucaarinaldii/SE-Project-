@@ -124,38 +124,35 @@
 | **Main Success Scenario** | Staff wants to create, edit or deactivate a user account.<br>1. Staff selects "Manage Accounts".<br>2. System retrieves the list of accounts from the Database.<br>3. System displays the list.<br>4. Staff chooses an action (create, edit, deactivate) and, if needed, an account.<br>5. Staff enters or modifies the data (ID, name, surname, mail, role).<br>6. System validates the data.<br>7. System saves the changes in the Database.<br>8. Staff receives a confirmation. |
 | **Postconditions** | Success: the account is created, updated or deactivated in the Database.<br>Exception: no changes are made and Staff is informed why. |
 
-
-
 ## 12. Authentication
 
 | | |
 |---|---|
 | **Use Case Name** | Authentication |
-| **Actors** | Student (primary)<br>Staff (primary)<br>Database (secondary) |
-| **Preconditions** | - The user has a registered account in the system.<br>- The Database is reachable.<br>- The user has started a use case that includes "Authentication" (View Equipment, View History Of Reservations, View Tickets, Manage Accounts). |
-| **Main Success Scenario** | The user (Student or Staff) wants to access the system.<br>1. System asks the user for credentials.<br>2. User enters username and password.<br>3. System sends the credentials to the Database for verification.<br>4. Database confirms the credentials and returns the user's role (Student / Staff).<br>5. System creates a session and grants access according to the role.<br>6. System returns control to the use case that included "Authentication". |
-| **Extensions (Alternate Flows)** | **Invalid credentials:**<br>1. Database reports that the credentials do not match.<br>2. System shows an error message and asks the user to try again (back to step 2).<br>3. After 3 failed attempts, System temporarily blocks login for this account.<br><br>**Account deactivated:**<br>1. Database reports that the account is deactivated.<br>2. System denies access and tells the user to contact Staff.<br><br>**Database unreachable:**<br>1. System cannot connect to the Database.<br>2. System shows a "service unavailable" message. |
-| **Postconditions** | Success: the user is authenticated, a session is active and access is granted according to the role.<br>Exception: the user is not authenticated, has no access to protected functions and is informed of the reason. |
+| **Actors** | User (primary)<br>Staff (primary)<br>Database (secondary) |
+| **Preconditions** | - User/Staff has an account in the system;<br>- Database is reachable. |
+| **Main Success Scenario** | User/Staff wants to log in to the system.<br>1. System shows the login page.<br>2. User/Staff enters their email and password.<br>3. System checks the credentials in the Database.<br>4. Database returns the role of the account (user or staff).<br>5. System opens a session with the rights of this role.<br>6. System opens the requested page.<br><br>"Authentication" is included in "View Equipment", "View History of Reservations", "View Tickets" and "Manage Accounts". |
+| **Extensions (Alternate Flows)** | **Wrong email or password:**<br>1. Login fails;<br>2. System shows an error and asks the user to try again;<br>3. After 3 failed attempts, login is temporarily blocked.<br><br>**Account was deactivated by staff:**<br>1. Login is not allowed;<br>2. System tells the user to contact the staff.<br><br>**Database is not reachable:**<br>1. System shows an error to the user;<br>2. Login is not possible. |
+| **Postconditions** | Success: the user is logged in with the rights of their role.<br>Exception: the user is not logged in and is informed why. |
 
 ## 13. Track Material
 
 | | |
 |---|---|
-| **Use Case Name** | Track Material |
+| **Use Case Name** | Track material |
 | **Actors** | Staff (primary)<br>Database (secondary) |
-| **Preconditions** | - Staff is authenticated.<br>- The Database is reachable.<br>- Materials are registered in the system. |
-| **Main Success Scenario** | Staff wants to check and update the state of the materials used by the equipment.<br>1. Staff opens the material tracking section.<br>2. System requests the current material records from the Database.<br>3. System displays the list of materials with quantity, status and the equipment they are used with.<br>4. Staff selects a material.<br>5. System displays the material details (current stock, usage history, linked equipment).<br>6. Staff updates the quantity or status of the material.<br>7. System validates the input and saves the changes to the Database.<br>8. System displays the updated material list. |
-| **Extensions (Alternate Flows)** | **Material missing, low or defective:**<br>1. System shows that the stock is below the minimum level, or Staff marks the material as defective.<br>2. Staff triggers the extension "Call Maintenance".<br>3. System includes "Report" and records the problem.<br>4. Maintenance is notified.<br><br>**Invalid input:**<br>1. Staff enters an invalid value (e.g. negative quantity).<br>2. System rejects the change and shows an error (back to step 6).<br><br>**Material not found:**<br>1. The Database has no record for the selected material.<br>2. System displays a message to Staff. |
-| **Postconditions** | Success: material records in the Database are up to date.<br>Exception: no changes are saved and Staff is informed; if maintenance was called, a report is recorded and maintenance is notified. |
+| **Preconditions** | - Staff is authenticated in the system;<br>- Staff has staff rights;<br>- Database is reachable. |
+| **Main Success Scenario** | Staff wants to check and update the stock of consumables (e.g. filament, acrylic sheets).<br>1. Staff opens "Track Material".<br>2. System retrieves the consumables from the Database.<br>3. System displays the list with quantity, minimum threshold and linked equipment.<br>4. Staff selects a consumable.<br>5. Staff updates the quantity (e.g. after a refill).<br>6. System validates the data.<br>7. System saves the changes in the Database.<br>8. Staff receives a confirmation.<br><br>Staff may filter the list by equipment or type at any time. |
+| **Extensions (Alternate Flows)** | **Consumable below the minimum threshold:**<br>1. System marks the consumable as "Low";<br>2. Staff calls maintenance for a refill ("Call Maintenance" extends this use case).<br><br>**Invalid quantity:**<br>1. System highlights the invalid field;<br>2. Staff corrects the value and resubmits.<br><br>**Database is not reachable:**<br>1. System shows an error to Staff;<br>2. No changes are saved. |
+| **Postconditions** | Success: the stock of consumables is up to date in the Database.<br>Exception: no changes are made and Staff is informed why. |
 
 ## 14. View Tickets
 
 | | |
 |---|---|
-| **Use Case Name** | View Tickets |
+| **Use Case Name** | View tickets |
 | **Actors** | Staff (primary)<br>Database (secondary) |
-| **Preconditions** | - Staff has a Staff account in the system.<br>- The Database is reachable. |
-| **Main Success Scenario** | Staff wants to review the issues reported for the equipment.<br>1. Staff opens the tickets section.<br>2. System includes "Authentication" to verify Staff's identity and role.<br>3. System requests the list of open tickets from the Database.<br>4. System displays the tickets (ID, equipment, description, reporter, date, status).<br>5. Staff selects a ticket.<br>6. System displays the ticket details.<br>7. Staff processes the ticket and updates its status (e.g. "In progress", "Resolved").<br>8. System saves the new status to the Database. |
-| **Extensions (Alternate Flows)** | **Machine needs repair:**<br>1. Staff decides that the equipment needs repair.<br>2. Staff triggers the extension "Call Maintenance".<br>3. System includes "Report" and records the issue.<br>4. Ticket status is set to "Maintenance requested".<br><br>**Machine is unsafe to use:**<br>1. Staff decides that the machine must not be used.<br>2. Staff triggers the extension "Block Machine".<br>3. System marks the machine as unavailable for reservation.<br>4. System includes "Report" and records the reason.<br><br>**No open tickets:**<br>System displays a "No open tickets" message to Staff.<br><br>**Authentication fails:**<br>1. "Authentication" fails.<br>2. System denies access to the tickets. |
-| **Postconditions** | Success: Staff has reviewed the tickets and status changes are saved in the Database; if an extension was triggered, maintenance is requested and/or the machine is blocked, and a report is recorded.<br>Exception: no ticket data is changed and Staff is informed. |
-
+| **Preconditions** | - Staff is authenticated in the system ("Authentication" is included);<br>- Staff has staff rights;<br>- Database is reachable. |
+| **Main Success Scenario** | Staff wants to see the problems reported by users.<br>1. Staff opens "View Tickets".<br>2. System retrieves the submitted reports from the Database.<br>3. System displays the tickets with equipment, user, date and status (open, in progress, maintenance requested, resolved, rejected).<br>4. Staff selects a ticket.<br>5. System shows the ticket details: equipment, user, issue type and description.<br>6. Staff may proceed to handle the ticket ("Report issue").<br><br>Staff may filter the list by status, equipment or date at any time. |
+| **Extensions (Alternate Flows)** | **Machine needs repair:**<br>1. Staff decides the machine needs maintenance;<br>2. Staff calls maintenance ("Call Maintenance" extends this use case).<br><br>**Machine is unsafe to use:**<br>1. Staff decides the machine must not be used;<br>2. Staff blocks the machine ("Block Machine" extends this use case).<br><br>**No tickets found:**<br>1. System shows the message "No tickets found". |
+| **Postconditions** | Success: Staff sees the list of tickets and the details of the selected ticket.<br>Exception: Staff is informed that no tickets were found. |
