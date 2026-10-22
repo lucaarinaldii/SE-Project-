@@ -6,9 +6,9 @@
 |---|---|
 | **Use Case Name** | Report |
 | **Actors** | User (primary)<br>Staff (secondary) |
-| **Preconditions** | - User is authenticated in the system;<br>- User has an active or recently completed reservation for the equipment. |
-| **Main Success Scenario** | User wants to report a problem with the equipment they used.<br>1. User opens their reservation and selects the equipment.<br>2. System checks that the user has a reservation for this equipment.<br>3. User chooses "Report".<br>4. User selects the issue type and enters a description.<br>5. System saves the report with status "Open".<br>6. System notifies the staff.<br>7. User receives a confirmation. |
-| **Extensions (Alternate Flows)** | **No reservation found:**<br>1. Report is not allowed;<br>2. System shows an error to the user.<br><br>**Required fields are empty:**<br>1. System highlights the missing fields;<br>2. User completes them and resubmits.<br><br>**Machine is unsafe to use:**<br>1. Staff reviews the report;<br>2. Staff blocks the machine ("Block Machine" extends this use case). |
+| **Preconditions** | - User is authenticated in the system. |
+| **Main Success Scenario** | User wants to report a problem with the equipment they used.<br>1. User opens their reservation.<br>2. System checks that the reservation is active or recently completed.<br>3. User chooses "Report".<br>4. User selects the issue type and enters a description.<br>5. System saves the report with status "Open".<br>6. System notifies the staff.<br>7. User receives a confirmation. |
+| **Extensions (Alternate Flows)** | **2a. Reservation is not active or recently completed:**<br>1. Report is not allowed;<br>2. System shows an error to the user.<br><br>**4a. Required fields are empty:**<br>1. System highlights the missing fields;<br>2. User completes them and resubmits. |
 | **Postconditions** | Success: report is saved and staff is notified.<br>Exception: report is not created and the user is informed why. |
 
 ## 2. Block Machine
@@ -19,7 +19,7 @@
 | **Actors** | Staff (primary)<br>User (secondary) |
 | **Preconditions** | - Staff is authenticated in the system;<br>- Staff has staff rights;<br>- The machine exists in the system. |
 | **Main Success Scenario** | Staff wants to make a machine unavailable for maintenance or repair.<br>1. Staff selects the machine.<br>2. Staff chooses "Block machine".<br>3. Staff enters the reason and the block period.<br>4. System shows the reservations in this period.<br>5. Staff decides which reservations to cancel.<br>6. System cancels the selected reservations and notifies the affected users.<br>7. System sets the machine status to "Blocked".<br>8. Staff receives a confirmation. |
-| **Extensions (Alternate Flows)** | **Machine is already blocked:**<br>1. System shows the current block details;<br>2. Staff can edit or extend the existing block.<br><br>**Machine is currently in use:**<br>1. System warns the staff about the active session;<br>2. Staff chooses to block immediately or after the session ends. |
+| **Extensions (Alternate Flows)** | **1a. Machine is already blocked:**<br>1. System shows the current block details;<br>2. Staff can edit or extend the existing block.<br><br>**4a. Machine is currently in use:**<br>1. System warns the staff about the active session;<br>2. Staff chooses to block immediately or after the session ends.<br><br>**4b. No reservations in this period:**<br>1. Steps 5–6 are skipped. |
 | **Postconditions** | Success: machine is blocked for the given period and affected users are notified.<br>Exception: machine status is unchanged. |
 
 ## 3. Reserve Time Slot
@@ -29,9 +29,9 @@
 | **Use Case Name** | Reserve time slot |
 | **Actors** | User (primary) |
 | **Preconditions** | - User is authenticated in the system. |
-| **Main Success Scenario** | User wants to reserve a piece of equipment.<br>1. User selects the equipment.<br>2. System **includes** "Track Availability" and shows free time slots.<br>3. User selects a time slot.<br>4. System checks that the slot is still free.<br>5. Reservation is created.<br>6. User receives a confirmation.<br>7. User confirms the reservation 15 minutes before the start. |
-| **Extensions (Alternate Flows)** | **Slot is no longer available:**<br>1. Reservation fails;<br>2. System shows an error and suggests the nearest free slots.<br><br>**Machine is blocked:**<br>1. System does not show the machine's slots as available;<br>2. System shows the block reason to the user. |
-| **Postconditions** | Success: time slot is reserved and confirmed by the user.<br>Exception: no reservation is created and the user is notified of failure. |
+| **Main Success Scenario** | User wants to reserve a piece of equipment.<br>1. User selects the equipment.<br>2. System **includes** "Track Availability" and shows free time slots.<br>3. User selects a time slot.<br>4. System checks that the slot is still free.<br>5. System creates the reservation with status "Awaiting confirmation".<br>6. User receives a confirmation. |
+| **Extensions (Alternate Flows)** | **2a. Machine is blocked:**<br>1. System does not show the machine's slots as available;<br>2. System shows the block reason to the user.<br><br>**4a. Slot is no longer available:**<br>1. Reservation fails;<br>2. System shows an error and suggests the nearest free slots. |
+| **Postconditions** | Success: reservation is created with status "Awaiting confirmation".<br>Exception: no reservation is created and the user is notified of failure. |
 
 
 ## 4. View History of Reservations
@@ -72,9 +72,9 @@
 |---|---|
 | **Use Case Name** | Report issue |
 | **Actors** | Staff (primary)<br>User (secondary) |
-| **Preconditions** | - Staff is authenticated in the system;<br>- Staff has staff rights;<br>- At least one report has been submitted by a user ("Report"). |
-| **Main Success Scenario** | Staff wants to review and handle a reported problem.<br>1. Staff opens the list of reports.<br>2. System displays the reports with equipment, date and status (open, in progress, resolved, rejected).<br>3. Staff selects an open report.<br>4. System shows the report details: equipment, user, issue type and description.<br>5. Staff sets the status to "In progress".<br>6. Staff fixes the problem.<br>7. Staff sets the status to "Resolved" and adds a comment.<br>8. System notifies the user who submitted the report. |
-| **Extensions (Alternate Flows)** | **Machine is unsafe to use:**<br>1. Staff decides the machine must not be used;<br>2. Staff blocks the machine ("Block Machine" extends this use case).<br><br>**Report is not valid:**<br>1. Staff sets the status to "Rejected" and adds the reason;<br>2. System notifies the user.<br><br>**No open reports:**<br>1. System shows the message "No open reports". |
+| **Preconditions** | - Staff is authenticated in the system;<br>- Staff has staff rights. |
+| **Main Success Scenario** | Staff wants to review and handle a reported problem.<br>1. Staff opens the list of reports.<br>2. System displays the reports with equipment, date and status (open, in progress, maintenance requested, resolved, rejected).<br>3. Staff selects an open report.<br>4. System shows the report details: equipment, user, issue type and description.<br>5. Staff sets the status to "In progress".<br>6. Staff records the repair in the system.<br>7. Staff sets the status to "Resolved" and adds a comment.<br>8. System notifies the user who submitted the report. |
+| **Extensions (Alternate Flows)** | **2a. No open reports:**<br>1. System shows the message "No open reports".<br><br>**4a. Machine is unsafe to use:**<br>1. Staff decides the machine must not be used;<br>2. Staff blocks the machine ("Block Machine" extends this use case).<br><br>**4b. Report is not valid:**<br>1. Staff sets the status to "Rejected" and adds the reason;<br>2. System notifies the user. |
 | **Postconditions** | Success: the report is resolved or rejected and the user is notified.<br>Exception: the report status is unchanged. |
 
 ## 8. Cancel Reservations
@@ -83,9 +83,9 @@
 |---|---|
 | **Use Case Name** | Cancel reservations |
 | **Actors** | User (primary)<br>Staff (primary) |
-| **Preconditions** | - User/Staff is authenticated in the system;<br>- The reservation exists and has not started yet. |
-| **Main Success Scenario** | User wants to cancel their reservation.<br>1. User opens "My reservations".<br>2. User selects an upcoming reservation.<br>3. User chooses "Cancel reservation".<br>4. System asks the user to confirm the cancellation.<br>5. User confirms.<br>6. System sets the reservation status to "Cancelled".<br>7. System makes the time slot available again.<br>8. User receives a confirmation. |
-| **Extensions (Alternate Flows)** | **Staff cancels reservations (e.g. during "Block Machine"):**<br>1. Staff selects one or more reservations;<br>2. Staff enters the reason;<br>3. System cancels the selected reservations;<br>4. System notifies the affected users with the reason.<br><br>**Reservation has already started or ended:**<br>1. Cancellation is not allowed;<br>2. System shows an error to the user.<br><br>**User does not confirm the cancellation:**<br>1. Reservation stays unchanged. |
+| **Preconditions** | - User/Staff is authenticated in the system. |
+| **Main Success Scenario** | User wants to cancel their reservation.<br>1. User opens "My reservations".<br>2. User selects a reservation.<br>3. User chooses "Cancel reservation".<br>4. System checks that the reservation has not started yet.<br>5. System asks the user to confirm the cancellation.<br>6. User confirms.<br>7. System sets the reservation status to "Cancelled".<br>8. System makes the time slot available again.<br>9. User receives a confirmation. |
+| **Extensions (Alternate Flows)** | **1a. Staff cancels reservations (e.g. during "Block Machine"):**<br>1. Staff selects one or more reservations;<br>2. Staff enters the reason;<br>3. System cancels the selected reservations;<br>4. System notifies the affected users with the reason.<br><br>**4a. Reservation has already started or ended:**<br>1. Cancellation is not allowed;<br>2. System shows an error to the user.<br><br>**6a. User does not confirm the cancellation:**<br>1. Reservation stays unchanged. |
 | **Postconditions** | Success: the reservation is cancelled, the time slot is free again and the user is informed.<br>Exception: the reservation is unchanged and the user is informed why. |
 
 ## 9. Check Reservation
@@ -94,13 +94,10 @@
 |---|---|
 | **Use Case Name** | Check reservation |
 | **Actors** | User (primary) |
-| **Preconditions** | - User is authenticated in the system;<br>- User has a reservation with status "Awaiting confirmation";<br>- The reservation starts in 15 minutes or less. |
-| **Main Success Scenario** | User wants to confirm that they will use their reservation.<br>1. System sends the user a reminder 15 minutes before the start.<br>2. User opens the reservation.<br>3. System shows the reservation details: equipment, time slot and status.<br>4. User confirms the reservation.<br>5. System sets the status to "Confirmed".<br>6. User receives a confirmation. |
-| **Extensions (Alternate Flows)** | **User does not confirm before the start:**<br>1. System cancels the reservation automatically;<br>2. System makes the time slot available again;<br>3. System notifies the user.<br><br>**Reservation was cancelled by staff:**<br>1. System shows the status "Cancelled" and the reason;<br>2. User cannot confirm the reservation. |
+| **Preconditions** | - User is authenticated in the system;<br>- User has a reservation that starts in 15 minutes or less. |
+| **Main Success Scenario** | User wants to confirm that they will use their reservation.<br>1. System sends the user a reminder 15 minutes before the start.<br>2. User opens the reservation.<br>3. System checks that the reservation status is "Awaiting confirmation".<br>4. System shows the reservation details: equipment, time slot and status.<br>5. User confirms the reservation.<br>6. System sets the status to "Confirmed".<br>7. User receives a confirmation. |
+| **Extensions (Alternate Flows)** | **3a. Reservation was cancelled by staff:**<br>1. System shows the status "Cancelled" and the reason;<br>2. User cannot confirm the reservation.<br><br>**5a. User does not confirm before the start:**<br>1. System cancels the reservation automatically;<br>2. System makes the time slot available again;<br>3. System notifies the user. |
 | **Postconditions** | Success: the reservation is confirmed.<br>Exception: the reservation is cancelled and the user is notified. |
-
-
-
 
 ## 10. Call Maintenance
 
