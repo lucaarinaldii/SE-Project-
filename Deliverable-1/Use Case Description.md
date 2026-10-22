@@ -122,7 +122,6 @@
 | **Actors** | Staff (primary)<br>Database (secondary) |
 | **Preconditions** | - Staff is authenticated in the system ("Authentication" is included);<br>- Database is reachable. |
 | **Main Success Scenario** | Staff wants to create, edit or deactivate a user account.<br>1. Staff selects "Manage Accounts".<br>2. System retrieves the list of accounts from the Database.<br>3. System displays the list.<br>4. Staff chooses an action (create, edit, deactivate) and, if needed, an account.<br>5. Staff enters or modifies the data (ID, name, surname, mail, role).<br>6. System validates the data.<br>7. System saves the changes in the Database.<br>8. Staff receives a confirmation. |
-| **Extensions (Alternate Flows)** | **Invalid or duplicate data:**<br>1. System highlights the incorrect fields (e.g. ID or mail already in use);<br>2. Staff corrects them and resubmits.<br><br>**Account has active reservations:**<br>1. System warns Staff before deactivation;<br>2. Staff confirms (reservations are cancelled) or aborts.<br><br>**Staff cancels the operation:**<br>1. No changes are saved.<br><br>**Database is not reachable:**<br>1. System shows an error to Staff;<br>2. No changes are saved. |
 | **Postconditions** | Success: the account is created, updated or deactivated in the Database.<br>Exception: no changes are made and Staff is informed why. |
 
 
