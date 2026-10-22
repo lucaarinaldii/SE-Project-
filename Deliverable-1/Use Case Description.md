@@ -98,3 +98,31 @@
 | **Main Success Scenario** | User wants to confirm that they will use their reservation.<br>1. System sends the user a reminder 15 minutes before the start.<br>2. User opens the reservation.<br>3. System shows the reservation details: equipment, time slot and status.<br>4. User confirms the reservation.<br>5. System sets the status to "Confirmed".<br>6. User receives a confirmation. |
 | **Extensions (Alternate Flows)** | **User does not confirm before the start:**<br>1. System cancels the reservation automatically;<br>2. System makes the time slot available again;<br>3. System notifies the user.<br><br>**Reservation was cancelled by staff:**<br>1. System shows the status "Cancelled" and the reason;<br>2. User cannot confirm the reservation. |
 | **Postconditions** | Success: the reservation is confirmed.<br>Exception: the reservation is cancelled and the user is notified. |
+
+
+
+
+## 10. Call Maintenance
+
+| | |
+|---|---|
+| **Use Case Name** | Call Maintenance |
+| **Actors** | Staff (primary)<br>Database (secondary) |
+| **Preconditions** | - Staff is authenticated in the system;<br>- Database is reachable;<br>- At least one open report exists for the equipment, or a consumable is below its minimum threshold. |
+| **Main Success Scenario** | Staff wants to request maintenance for a faulty or low-supply machine.<br>1. Staff opens "View Tickets" and selects a report.<br>2. System retrieves the equipment data and the report details from the Database.<br>3. Staff chooses "Call Maintenance".<br>4. System includes "Report": it compiles the maintenance request (equipment, location, reason).<br>5. Staff reviews and confirms the request.<br>6. System sends the request to the maintenance service.<br>7. System updates the report status to "Maintenance requested".<br>8. Staff receives a confirmation. |
+| **Extensions (Alternate Flows)** | **Low material (extends Track Material):**<br>1. Track Material detects a consumable below the minimum threshold;<br>2. Staff calls maintenance for a refill and continues from step 4.<br><br>**Maintenance already requested:**<br>1. System shows the status of the existing request;<br>2. No new request is created.<br><br>**Machine has upcoming reservations:**<br>1. System warns Staff about the booked time slots;<br>2. Staff continues or cancels the request.<br><br>**Database is not reachable:**<br>1. System shows an error to Staff;<br>2. The request is not sent. |
+| **Postconditions** | Success: the maintenance request is sent and the report status is updated.<br>Exception: no request is created and Staff is informed why. |
+
+
+## 11. Manage Accounts
+
+| | |
+|---|---|
+| **Use Case Name** | Call Maintenance |
+| **Actors** | Staff (primary)<br>Database (secondary) |
+| **Preconditions** | - Staff is authenticated in the system;<br>- Database is reachable;<br>- At least one open report exists for the equipment, or a consumable is below its minimum threshold. |
+| **Main Success Scenario** | Staff wants to request maintenance for a faulty or low-supply machine.<br>1. Staff opens "View Tickets" and selects a report.<br>2. System retrieves the equipment data and the report details from the Database.<br>3. Staff chooses "Call Maintenance".<br>4. System includes "Report": it compiles the maintenance request (equipment, location, reason).<br>5. Staff reviews and confirms the request.<br>6. System sends the request to the maintenance service.<br>7. System updates the report status to "Maintenance requested".<br>8. Staff receives a confirmation. |
+| **Extensions (Alternate Flows)** | **Low material (extends Track Material):**<br>1. Track Material detects a consumable below the minimum threshold;<br>2. Staff calls maintenance for a refill and continues from step 4.<br><br>**Maintenance already requested:**<br>1. System shows the status of the existing request;<br>2. No new request is created.<br><br>**Machine has upcoming reservations:**<br>1. System warns Staff about the booked time slots;<br>2. Staff continues or cancels the request.<br><br>**Database is not reachable:**<br>1. System shows an error to Staff;<br>2. The request is not sent. |
+| **Postconditions** | Success: the maintenance request is sent and the report status is updated.<br>Exception: no request is created and Staff is informed why. |
+
+
