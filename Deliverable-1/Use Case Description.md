@@ -118,11 +118,12 @@
 
 | | |
 |---|---|
-| **Use Case Name** | Call Maintenance |
+| **Use Case Name** | Manage Accounts |
 | **Actors** | Staff (primary)<br>Database (secondary) |
-| **Preconditions** | - Staff is authenticated in the system;<br>- Database is reachable;<br>- At least one open report exists for the equipment, or a consumable is below its minimum threshold. |
-| **Main Success Scenario** | Staff wants to request maintenance for a faulty or low-supply machine.<br>1. Staff opens "View Tickets" and selects a report.<br>2. System retrieves the equipment data and the report details from the Database.<br>3. Staff chooses "Call Maintenance".<br>4. System includes "Report": it compiles the maintenance request (equipment, location, reason).<br>5. Staff reviews and confirms the request.<br>6. System sends the request to the maintenance service.<br>7. System updates the report status to "Maintenance requested".<br>8. Staff receives a confirmation. |
-| **Extensions (Alternate Flows)** | **Low material (extends Track Material):**<br>1. Track Material detects a consumable below the minimum threshold;<br>2. Staff calls maintenance for a refill and continues from step 4.<br><br>**Maintenance already requested:**<br>1. System shows the status of the existing request;<br>2. No new request is created.<br><br>**Machine has upcoming reservations:**<br>1. System warns Staff about the booked time slots;<br>2. Staff continues or cancels the request.<br><br>**Database is not reachable:**<br>1. System shows an error to Staff;<br>2. The request is not sent. |
-| **Postconditions** | Success: the maintenance request is sent and the report status is updated.<br>Exception: no request is created and Staff is informed why. |
+| **Preconditions** | - Staff is authenticated in the system ("Authentication" is included);<br>- Database is reachable. |
+| **Main Success Scenario** | Staff wants to create, edit or deactivate a user account.<br>1. Staff selects "Manage Accounts".<br>2. System retrieves the list of accounts from the Database.<br>3. System displays the list.<br>4. Staff chooses an action (create, edit, deactivate) and, if needed, an account.<br>5. Staff enters or modifies the data (ID, name, surname, mail, role).<br>6. System validates the data.<br>7. System saves the changes in the Database.<br>8. Staff receives a confirmation. |
+| **Extensions (Alternate Flows)** | **Invalid or duplicate data:**<br>1. System highlights the incorrect fields (e.g. ID or mail already in use);<br>2. Staff corrects them and resubmits.<br><br>**Account has active reservations:**<br>1. System warns Staff before deactivation;<br>2. Staff confirms (reservations are cancelled) or aborts.<br><br>**Staff cancels the operation:**<br>1. No changes are saved.<br><br>**Database is not reachable:**<br>1. System shows an error to Staff;<br>2. No changes are saved. |
+| **Postconditions** | Success: the account is created, updated or deactivated in the Database.<br>Exception: no changes are made and Staff is informed why. |
+
 
 
