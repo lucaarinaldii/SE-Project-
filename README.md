@@ -11,8 +11,8 @@
 | [Member 1] | [@lucaarinaldii] |
 | [Member 2] | [@reflowgang] |
 | [Member 3] | [@mlproef] |
-| [Member 4] | [@username] |
-| [Member 5] | [@username] |
+| [Member 4] | [@kohhhut] |
+| [Member 5] | [@lenasviatko] |
 
 ## Planning
 
