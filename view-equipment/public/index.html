@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Makerspace equipment</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <main class="page">
+      <header>
+        <p class="eyebrow">Campus makerspace</p>
+        <h1>Equipment catalogue</h1>
+      </header>
+
+      <section class="session" aria-label="Session">
+        <label for="session">Session</label>
+        <input id="session" autocomplete="off" placeholder="demo-session" value="demo-session">
+        <button id="applySession" type="button">Use session</button>
+        <p id="sessionNote" class="note"></p>
+      </section>
+
+      <section class="toolbar">
+        <label for="type">Type</label>
+        <select id="type">
+          <option value="">All types</option>
+          <option value="3D-принтер">3D printer</option>
+          <option value="лазерный резак">Laser cutter</option>
+          <option value="электроника">Electronics</option>
+        </select>
+      </section>
+
+      <p id="message" class="message" role="status"></p>
+      <div id="list" class="list"></div>
+      <article id="details" class="details" hidden></article>
+    </main>
+    <script src="/app.js"></script>
+  </body>
+</html>

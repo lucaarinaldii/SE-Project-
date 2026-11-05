@@ -1,0 +1,84 @@
+:root {
+  color: #1c2430;
+  background: #f3f0e8;
+  font-family: "Segoe UI", sans-serif;
+}
+
+body { margin: 0; }
+
+.page {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 32px 20px 64px;
+}
+
+h1, h2, p { margin: 0; }
+
+.eyebrow {
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  color: #6b6256;
+}
+
+header h1 { margin-top: 6px; font-size: 2rem; }
+
+.session, .toolbar, .details, .card {
+  margin-top: 20px;
+  padding: 16px;
+  background: #fffdf8;
+  border: 1px solid #e2d8c8;
+  border-radius: 12px;
+}
+
+label { display: block; margin-bottom: 6px; font-size: 0.9rem; }
+
+input, select, button { font: inherit; }
+
+input, select {
+  padding: 8px 10px;
+  border: 1px solid #cfc3b2;
+  border-radius: 8px;
+}
+
+button, .card { cursor: pointer; }
+
+button {
+  margin-left: 8px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: #245c4a;
+  color: white;
+}
+
+.note, .muted { color: #6b6256; }
+.note, .message { margin-top: 8px; }
+.message { min-height: 1.2em; }
+.list { display: grid; gap: 12px; }
+.card { text-align: left; width: 100%; }
+
+.card header, .status-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+}
+
+.badge {
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 0.85rem;
+}
+
+.badge.open { background: #e5f4ec; color: #1f6b45; }
+.badge.blocked { background: #fde8e4; color: #9c3b2e; }
+
+.details dl {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 8px 12px;
+  margin: 12px 0 0;
+}
+
+.details dt { color: #6b6256; }
