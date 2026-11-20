@@ -1,0 +1,11 @@
+[
+  {
+    "id": "user-student",
+    "name": "Campus Student",
+    "email": "student@university.edu",
+    "passwordHash": "scrypt$4ca4fb09d51bedb1665c4d7c2cee372b$88c56348fc3224b4f3940e9a823ec8bed4d052c7a4adae1c915a20d0bf400f48",
+    "role": "user",
+    "failedAttempts": 0,
+    "lockedUntil": ""
+  }
+]

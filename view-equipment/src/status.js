@@ -7,7 +7,9 @@ function toPublicStatus(stored) {
   return {
     state: "blocked",
     reason: stored.reason || "",
-    period: stored.period || ""
+    period: stored.period || "",
+    blockStart: stored.blockStart || "",
+    blockEnd: stored.blockEnd || ""
   };
 }
 

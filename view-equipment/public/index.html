@@ -4,35 +4,168 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Makerspace equipment</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/styles.css">
   </head>
   <body>
-    <main class="page">
-      <header>
+    <section id="auth" class="auth">
+      <div class="auth-card">
         <p class="eyebrow">Campus makerspace</p>
-        <h1>Equipment catalogue</h1>
+        <h1>Sign in</h1>
+        <p class="lede">Use an existing account, or create one for this catalogue.</p>
+        <div class="auth-switch" role="tablist" aria-label="Account">
+          <button id="showSignIn" class="tab is-selected" type="button" role="tab" aria-selected="true" aria-controls="signInForm">Sign in</button>
+          <button id="showRegister" class="tab" type="button" role="tab" aria-selected="false" aria-controls="registerForm">Create account</button>
+        </div>
+        <p id="authMessage" class="banner is-blocked" role="status" hidden></p>
+        <form id="signInForm">
+          <label for="signInEmail">Email</label>
+          <input id="signInEmail" type="email" autocomplete="username" required>
+          <label for="signInPassword">Password</label>
+          <input id="signInPassword" type="password" autocomplete="current-password" required>
+          <button class="primary" type="submit">Sign in</button>
+        </form>
+        <form id="registerForm" hidden>
+          <label for="registerName">Name</label>
+          <input id="registerName" autocomplete="name" required>
+          <label for="registerEmail">Email</label>
+          <input id="registerEmail" type="email" autocomplete="username" required>
+          <label for="registerPassword">Password</label>
+          <input id="registerPassword" type="password" autocomplete="new-password" minlength="8" required>
+          <p class="note">At least 8 characters.</p>
+          <button class="primary" type="submit">Create account</button>
+        </form>
+        <p class="note">Existing account: student@university.edu, password makerspace.</p>
+      </div>
+    </section>
+    <main id="appShell" class="app" hidden>
+      <header class="topbar">
+        <div class="topbar-main">
+          <button id="backToChoices" class="back-link" type="button" hidden>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6.5 9 12l5.5 5.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            Back to choices
+          </button>
+          <p class="eyebrow">Campus makerspace</p>
+          <h1 id="pageTitle">Choose what to book</h1>
+          <p id="pageLede" class="lede">Pick a machine. Open it to see the day and take a free slot.</p>
+        </div>
+        <div class="account-bar">
+          <p id="accountLine"></p>
+          <button id="openAccount" class="icon-button" type="button" aria-label="Account">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="8" r="3.2" fill="none" stroke="currentColor" stroke-width="1.8"></circle>
+              <path d="M5.5 19.2c1.4-3 3.6-4.4 6.5-4.4s5.1 1.4 6.5 4.4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path>
+            </svg>
+          </button>
+        </div>
       </header>
 
-      <section class="session" aria-label="Session">
-        <label for="session">Session</label>
-        <input id="session" autocomplete="off" placeholder="demo-session" value="demo-session">
-        <button id="applySession" type="button">Use session</button>
-        <p id="sessionNote" class="note"></p>
+      <div id="chooseView">
+      <section class="controls" aria-label="Catalogue controls">
+        <div class="field">
+          <label for="type">Type</label>
+          <select id="type">
+            <option value="">All types</option>
+            <option value="3D-принтер">3D printer</option>
+            <option value="лазерный резак">Laser cutter</option>
+            <option value="электроника">Electronics</option>
+          </select>
+        </div>
       </section>
 
-      <section class="toolbar">
-        <label for="type">Type</label>
-        <select id="type">
-          <option value="">All types</option>
-          <option value="3D-принтер">3D printer</option>
-          <option value="лазерный резак">Laser cutter</option>
-          <option value="электроника">Electronics</option>
-        </select>
-      </section>
+      <p id="message" class="banner is-blocked" role="status" hidden></p>
 
-      <p id="message" class="message" role="status"></p>
-      <div id="list" class="list"></div>
-      <article id="details" class="details" hidden></article>
+      <div class="workspace">
+        <section class="catalogue" aria-label="Machines">
+          <div class="section-head">
+            <h2>Your choices</h2>
+            <p id="count" class="note"></p>
+          </div>
+          <div id="list" class="list"></div>
+        </section>
+        <article id="details" class="details">
+          <div class="empty">
+            <p class="eyebrow">Machine</p>
+            <h2>Pick one</h2>
+            <p>Each card is a machine you can book. Open it, then choose a free slot.</p>
+          </div>
+        </article>
+      </div>
+      </div>
+
+      <section id="accountView" hidden>
+        <div class="account-panel">
+          <div class="account-identity">
+            <span id="accountAvatar" class="avatar" aria-hidden="true"></span>
+            <div>
+              <p class="eyebrow">Account</p>
+              <h2 id="accountName"></h2>
+              <p class="note"><span id="accountEmail"></span> · <span id="accountRole"></span></p>
+            </div>
+          </div>
+          <button id="signOut" class="ghost" type="button">Sign out</button>
+        </div>
+        <section class="account-filters" aria-label="Reservation filters">
+          <div class="filter-block">
+            <div class="filter-head">
+              <p id="historyDayLabel" class="filter-label">All dates</p>
+              <button id="clearHistoryDate" class="chip is-selected" type="button" aria-pressed="true">All dates</button>
+            </div>
+            <div class="day-picker">
+              <button class="day-nav" type="button" data-history-shift="-7" aria-label="Previous week">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6.5 9 12l5.5 5.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+              </button>
+              <div id="historyDayStrip" class="day-strip" role="group" aria-label="Date"></div>
+              <button class="day-nav" type="button" data-history-shift="7" aria-label="Next week">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 6.5 15 12l-5.5 5.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+              </button>
+            </div>
+            <input id="historyDate" hidden>
+          </div>
+          <div class="filter-block">
+            <p id="historyEquipmentLabel" class="filter-label">Equipment</p>
+            <div id="historyEquipmentChips" class="chip-row" role="group" aria-labelledby="historyEquipmentLabel"></div>
+            <select id="historyEquipment" hidden>
+              <option value="">All equipment</option>
+            </select>
+          </div>
+          <div class="filter-block">
+            <p id="historyStatusLabel" class="filter-label">Status</p>
+            <div id="historyStatusChips" class="chip-row" role="group" aria-labelledby="historyStatusLabel">
+              <button class="chip is-selected" type="button" data-status="" aria-pressed="true">All</button>
+              <button class="chip" type="button" data-status="Awaiting confirmation" aria-pressed="false">Awaiting</button>
+              <button class="chip" type="button" data-status="Confirmed" aria-pressed="false">Confirmed</button>
+              <button class="chip" type="button" data-status="Completed" aria-pressed="false">Completed</button>
+              <button class="chip" type="button" data-status="Cancelled" aria-pressed="false">Cancelled</button>
+            </div>
+            <select id="historyStatus" hidden>
+              <option value="">All statuses</option>
+              <option value="Awaiting confirmation">Awaiting confirmation</option>
+              <option value="Confirmed">Confirmed</option>
+              <option value="Completed">Completed</option>
+              <option value="Cancelled">Cancelled</option>
+            </select>
+          </div>
+        </section>
+        <p id="historyMessage" class="banner is-warning" role="status" hidden></p>
+        <div class="workspace account-workspace">
+          <section class="catalogue" aria-label="My reservations">
+            <div class="section-head">
+              <h2>Reservations</h2>
+            </div>
+            <div id="historyList" class="list"></div>
+          </section>
+          <article id="historyDetails" class="details">
+            <div class="empty">
+              <p class="eyebrow">Reservation</p>
+              <h2>Pick one</h2>
+              <p>Open a reservation to see the machine, the time, and the status.</p>
+            </div>
+          </article>
+        </div>
+      </section>
     </main>
     <script src="/app.js"></script>
   </body>

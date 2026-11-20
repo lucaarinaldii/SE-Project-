@@ -1,0 +1,38 @@
+[
+  {
+    "id": "res-3d-cancelled",
+    "equipmentId": "eq-3d-1",
+    "date": "2026-11-19",
+    "start": "09:00",
+    "end": "10:00",
+    "status": "Cancelled",
+    "studentId": "user-student"
+  },
+  {
+    "id": "res-3d-morning",
+    "equipmentId": "eq-3d-1",
+    "date": "2026-11-19",
+    "start": "10:00",
+    "end": "12:00",
+    "status": "Awaiting confirmation",
+    "studentId": "user-student"
+  },
+  {
+    "id": "res-3d-afternoon",
+    "equipmentId": "eq-3d-1",
+    "date": "2026-11-19",
+    "start": "14:00",
+    "end": "15:00",
+    "status": "Confirmed",
+    "studentId": "s2"
+  },
+  {
+    "id": "res-elec-day",
+    "equipmentId": "eq-elec-1",
+    "date": "2026-11-19",
+    "start": "09:00",
+    "end": "18:00",
+    "status": "Confirmed",
+    "studentId": "s3"
+  }
+]

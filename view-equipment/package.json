@@ -6,9 +6,16 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "build": "node --check server.js && node --check src/db.js && node --check src/storage.js && node --check src/api.js && node --check src/page.js && node --check src/login.js && node --check src/history.js && node --check src/reserve.js && node --check src/confirmation.js && node --check src/mail.js && node --check src/report.js && node --check src/catalogue.js && node --check src/status.js && node --check src/availability.js && node --check src/errors.js && node --check check.js && node --check public/app.js",
     "check": "node check.js"
   },
   "engines": {
     "node": ">=18"
+  },
+  "dependencies": {
+    "@neon/config": "^1.14.4",
+    "@neon/env": "^2.1.7",
+    "@neondatabase/serverless": "^1.2.1",
+    "ws": "^8.23.0"
   }
 }
