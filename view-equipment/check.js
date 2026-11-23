@@ -1,12 +1,14 @@
 const assert = require("assert");
 const { listEquipment, equipmentDetails } = require("./src/catalogue");
 const { statusOf, machineStatus } = require("./src/status");
-const { prepareDatabase, listMachineRecords, readStoredStatus, listReservationRecords, deleteUserByEmail, withUsers, deleteReservation, insertReservation } = require("./src/storage");
+const { prepareDatabase, listMachineRecords, readStoredStatus, listReservationRecords, deleteUserByEmail, withUsers, deleteReservation, insertReservation, setMachineBlock } = require("./src/storage");
 const { confirmReservation, cancelReservation } = require("./src/confirmation");
 const { submitReport } = require("./src/report");
 const { currentSession, signIn, registerAccount, accountId } = require("./src/login");
 const { buildList, buildDetails, buildAvailability, buildHistory, buildReservation, createReservation } = require("./src/page");
 const { slotIsPast } = require("./src/availability");
+const { blockEquipment } = require("./src/staff");
+const { writeToUser } = require("./src/message");
 const { handle } = require("./src/api");
 
 function requestWith(token) {
@@ -54,6 +56,8 @@ function request(path, token, options = {}) {
   let cancelId = "";
   let pastCancelId = "";
   let reportReservationId = "";
+  let ticketId = "";
+  let blockReservationId = "";
   try {
   assert.throws(() => currentSession(requestWith("")), (error) => error.code === "NoSession");
   await assert.rejects(signIn("student@university.edu", "wrong-password"), (error) => error.code === "InvalidCredentials");
@@ -68,14 +72,18 @@ function request(path, token, options = {}) {
   await assert.rejects(listEquipment("printer"), (error) => error.code === "UnknownType");
 
   const all = await listEquipment("");
-  assert.equal(all.some((item) => item.type === "printer"), true);
+  assert.equal(all.filter((item) => item.type === "3D printer").length, 3);
+  assert.equal(all.filter((item) => item.type === "laser cutter").length, 3);
+  assert.equal(all.filter((item) => item.type === "electronics workstation").length, 3);
+  assert.equal(all.filter((item) => item.type === "printer").length, 3);
+  assert.equal(new Set(all.map((item) => item.serial)).size, all.length);
   assert.equal(all.every((item) => !("status" in item) && !("Min_Threshold" in item)), true);
 
   const printers = await listEquipment("3D-принтер");
-  assert.deepEqual(printers.map((item) => item.type), ["3D printer"]);
+  assert.deepEqual(printers.map((item) => item.serial), ["MS-3DP-001", "MS-3DP-002", "MS-3DP-003"]);
 
   for (const record of await listMachineRecords()) {
-    assert.deepEqual(Object.keys(record).sort(), ["Location", "Max_Booking_Duration", "Type", "description", "id"]);
+    assert.deepEqual(Object.keys(record).sort(), ["Location", "Max_Booking_Duration", "Type", "description", "id", "serial"]);
   }
 
   const blocked = await machineStatus("eq-cutter-1");
@@ -83,16 +91,20 @@ function request(path, token, options = {}) {
   assert.equal("Is_Open" in blocked, false);
   assert.deepEqual(await machineStatus("eq-3d-1"), { state: "open" });
   assert.equal((await readStoredStatus("eq-cutter-1")).reason, "Lens replacement");
-  assert.equal((await statusOf(printers.map((item) => item.id))).length, 1);
+  assert.equal((await statusOf(printers.map((item) => item.id))).length, 3);
 
   const details = await equipmentDetails("eq-3d-1");
+  assert.equal(details.serial, "MS-3DP-001");
   assert.equal(details.rules, "Maximum booking duration: 180 minutes.");
   assert.equal("Max_Booking_Duration" in details, false);
 
   await assert.rejects(buildList(requestWith(""), ""), (error) => error.code === "NoSession");
   const view = await buildList(requestWith(token), "лазерный резак");
+  assert.equal(view.equipment.length, 3);
   assert.equal(view.equipment[0].status, "blocked");
   assert.equal(view.equipment[0].reason, "Lens replacement");
+  assert.equal(view.equipment[0].serial, "MS-LC-001");
+  assert.equal("blockStart" in view.equipment[0], false);
 
   const card = await buildDetails(requestWith(token), "eq-printer-1");
   assert.equal(card.status, "blocked");
@@ -231,21 +243,21 @@ function request(path, token, options = {}) {
     equipmentId: "eq-cutter-1", date: "2026-11-25", start: "09:00", end: "10:00"
   }), (error) => error.code === (slotIsPast("2026-11-25", "09:00") ? "PastSlot" : "MachineBlocked"));
   const made = await createReservation(requestWith(token), {
-    equipmentId: "eq-3d-1", date: "2026-11-20", start: "09:00", end: "10:00"
+    equipmentId: "eq-3d-1", date: "2026-12-03", start: "09:00", end: "10:00"
   });
   bookedId = made.id;
   assert.equal(made.status, "Awaiting confirmation");
   assert.equal(made.message, "Reservation created. Status: Awaiting confirmation.");
   assert.equal("studentId" in made, false);
   await assert.rejects(createReservation(requestWith(token), {
-    equipmentId: "eq-3d-1", date: "2026-11-20", start: "09:00", end: "10:00"
+    equipmentId: "eq-3d-1", date: "2026-12-03", start: "09:00", end: "10:00"
   }), (error) => error.code === "SlotTaken" && error.suggestions.length > 0);
-  const bookedDay = await buildHistory(requestWith(token), { date: "2026-11-20" });
+  const bookedDay = await buildHistory(requestWith(token), { date: "2026-12-03" });
   assert.equal(bookedDay.reservations.some((item) => item.id === bookedId), true);
-  assert.equal(bookedDay.reservations.every((item) => item.date === "2026-11-20"), true);
+  assert.equal(bookedDay.reservations.every((item) => item.date === "2026-12-03"), true);
   const taken = await request("/api/reservations", token, {
     method: "POST",
-    body: { equipmentId: "eq-3d-1", date: "2026-11-20", start: "09:00", end: "10:00" }
+    body: { equipmentId: "eq-3d-1", date: "2026-12-03", start: "09:00", end: "10:00" }
   });
   assert.equal(taken.status, 409);
   assert.equal(JSON.parse(taken.body).error, "SlotTaken");
@@ -298,7 +310,7 @@ function request(path, token, options = {}) {
     id: cancelId,
     equipmentId: "eq-elec-1",
     studentId: userId,
-    date: "2026-11-21",
+    date: "2026-12-03",
     start: "10:00",
     end: "11:00",
     status: "Awaiting confirmation"
@@ -355,9 +367,10 @@ function request(path, token, options = {}) {
     issueType: "Not working",
     description: "The nozzle does not heat."
   }, async () => true);
+  ticketId = reported.id;
   assert.equal(reported.status, "Open");
-  assert.equal(reported.mailSent, false);
-  assert.equal(reported.message, "Report submitted. Status: Open. The staff could not be notified.");
+  assert.equal(reported.mailSent, true);
+  assert.equal(reported.message, "Report submitted. Status: Open.");
   const reportResponse = await request(`/api/reservations/${reportReservationId}/report`, token, {
     method: "POST",
     body: { issueType: "Other", description: "Again" }
@@ -369,6 +382,183 @@ function request(path, token, options = {}) {
   assert.equal(saved.report.status, "Open");
   assert.equal(saved.report.issueType, "Not working");
 
+  const memberEmail = `member.${Date.now()}@university.edu`;
+  disposable.push(memberEmail);
+  const member = await registerAccount({ name: "Check Member", email: memberEmail, password: "long-enough" });
+  const denied = await request("/api/staff/equipment/eq-elec-1/block", member.token, {
+    method: "POST",
+    body: { reason: "Closed", untilFurtherNotice: true }
+  });
+  assert.equal(denied.status, 403);
+  assert.equal(JSON.parse(denied.body).error, "Forbidden");
+  const staffEmail = `staff.${Date.now()}@university.edu`;
+  disposable.push(staffEmail);
+  const staffAccount = await registerAccount({ name: "Check Staff", email: staffEmail, password: "long-enough" });
+  await withUsers((users) => {
+    users.find((item) => item.email === staffEmail).role = "staff";
+  });
+  const incomplete = await request("/api/staff/equipment/eq-elec-1/block", staffAccount.token, {
+    method: "POST",
+    body: { reason: "", untilFurtherNotice: false }
+  });
+  assert.equal(incomplete.status, 422);
+  assert.equal(JSON.parse(incomplete.body).error, "BlockIncomplete");
+  blockReservationId = `res-block-${Date.now()}`;
+  await insertReservation({
+    id: blockReservationId,
+    equipmentId: "eq-3d-1",
+    studentId: "user-student",
+    date: "2026-12-02",
+    start: "16:00",
+    end: "17:00",
+    status: "Confirmed"
+  });
+  const preview = await blockEquipment("eq-3d-1", {
+    reason: "Maintenance",
+    blockStart: "2026-12-02",
+    blockEnd: "2026-12-02"
+  });
+  assert.equal(preview.preview, true);
+  assert.equal(preview.reservations.some((item) => item.id === blockReservationId), true);
+  assert.equal((await machineStatus("eq-3d-1")).state, "open");
+  const blockedWithCancel = await blockEquipment("eq-3d-1", {
+    reason: "Maintenance",
+    blockStart: "2026-12-02",
+    blockEnd: "2026-12-02",
+    confirm: true,
+    cancelIds: [blockReservationId]
+  }, async () => true);
+  assert.equal(blockedWithCancel.message, "Machine blocked.");
+  assert.equal(blockedWithCancel.cancelled, 1);
+  assert.equal(blockedWithCancel.mailSent, true);
+  const cancelledRow = (await listReservationRecords()).find((item) => item.id === blockReservationId);
+  assert.equal(cancelledRow.status, "Cancelled");
+  await setMachineBlock("eq-3d-1", { open: true, reason: "", period: "", blockStart: "", blockEnd: "" });
+
+  const blockedMachine = await request("/api/staff/equipment/eq-elec-1/block", staffAccount.token, {
+    method: "POST",
+    body: { reason: "Lens check", blockStart: "2026-12-20", blockEnd: "2026-12-21" }
+  });
+  assert.equal(blockedMachine.status, 200);
+  assert.equal(JSON.parse(blockedMachine.body).message, "Machine blocked.");
+  const staffList = await request("/api/staff/equipment", staffAccount.token);
+  const staffBody = JSON.parse(staffList.body);
+  const electronics = staffBody.equipment.find((item) => item.id === "eq-elec-1");
+  assert.equal(electronics.status, "blocked");
+  assert.equal(electronics.reason, "Lens check");
+  assert.equal(electronics.period, "20 Dec 2026 – 21 Dec 2026");
+  const opened = await request("/api/staff/equipment/eq-elec-1/unblock", staffAccount.token, {
+    method: "POST",
+    body: {}
+  });
+  assert.equal(opened.status, 200);
+  assert.equal(JSON.parse(opened.body).message, "Machine unblocked.");
+  assert.equal((await machineStatus("eq-elec-1")).state, "open");
+
+  const deniedTickets = await request("/api/tickets", member.token);
+  assert.equal(deniedTickets.status, 403);
+  assert.equal(JSON.parse(deniedTickets.body).error, "Forbidden");
+  const deniedUpdate = await request(`/api/tickets/${ticketId}/status`, member.token, {
+    method: "POST",
+    body: { status: "Resolved" }
+  });
+  assert.equal(deniedUpdate.status, 403);
+  const openTickets = await request("/api/tickets?group=open", staffAccount.token);
+  assert.equal(openTickets.status, 200);
+  const openBody = JSON.parse(openTickets.body);
+  assert.equal(openBody.tickets.some((item) => item.id === ticketId && item.status === "Open" && item.profile.email === signed.account.email), true);
+  assert.equal(openBody.message, "");
+  const badStatus = await request(`/api/tickets/${ticketId}/status`, staffAccount.token, {
+    method: "POST",
+    body: { status: "Done" }
+  });
+  assert.equal(badStatus.status, 422);
+  assert.equal(JSON.parse(badStatus.body).error, "UnknownStatus");
+  const missingTicket = await request("/api/tickets/missing-ticket/status", staffAccount.token, {
+    method: "POST",
+    body: { status: "Resolved" }
+  });
+  assert.equal(missingTicket.status, 404);
+  assert.equal(JSON.parse(missingTicket.body).error, "TicketNotFound");
+  const updatedTicket = await request(`/api/tickets/${ticketId}/status`, staffAccount.token, {
+    method: "POST",
+    body: { status: "Resolved" }
+  });
+  assert.equal(updatedTicket.status, 200);
+  const updatedBody = JSON.parse(updatedTicket.body);
+  assert.equal(updatedBody.status, "Resolved");
+  assert.equal(updatedBody.message, "Ticket updated. Status: Resolved.");
+  assert.equal(updatedBody.issueType, "Not working");
+  const stillOpen = await request("/api/tickets?group=open", staffAccount.token);
+  assert.equal(JSON.parse(stillOpen.body).tickets.some((item) => item.id === ticketId), false);
+  const completedTickets = await request("/api/tickets?group=completed", staffAccount.token);
+  const completed = JSON.parse(completedTickets.body).tickets.find((item) => item.id === ticketId);
+  assert.equal(completed.status, "Resolved");
+  assert.equal(completed.description, "The nozzle does not heat.");
+  assert.equal(completed.user, signed.account.name);
+  const none = await request("/api/tickets?group=completed&date=2020-01-01", staffAccount.token);
+  const noneBody = JSON.parse(none.body);
+  assert.equal(none.status, 200);
+  assert.deepEqual(noneBody.tickets, []);
+  assert.equal(noneBody.message, "No tickets found");
+  const ownReport = await buildReservation(requestWith(token), reportReservationId);
+  assert.equal(ownReport.report.status, "Resolved");
+
+  const deniedAll = await request("/api/staff/reservations", member.token);
+  assert.equal(deniedAll.status, 403);
+  assert.equal(JSON.parse(deniedAll.body).error, "Forbidden");
+  const every = await request("/api/staff/reservations", staffAccount.token);
+  assert.equal(every.status, 200);
+  const everyBody = JSON.parse(every.body);
+  assert.equal(everyBody.reservations.some((item) => item.id === "res-elec-day"), true);
+  assert.equal(everyBody.reservations.some((item) => item.id === "res-3d-morning"), true);
+  assert.equal(everyBody.reservations.some((item) => "studentId" in item || "userId" in item || "password" in item), false);
+  const otherReservation = everyBody.reservations.find((item) => item.id === "res-elec-day");
+  assert.equal(otherReservation.user, "Unknown user");
+  assert.equal(otherReservation.profile, null);
+  const knownReservation = everyBody.reservations.find((item) => item.id === "res-3d-morning");
+  assert.equal(knownReservation.profile.email, signed.account.email);
+  assert.equal(knownReservation.profile.name, signed.account.name);
+  assert.equal(knownReservation.profile.role, signed.account.role);
+  assert.equal(otherReservation.canConfirm, false);
+  assert.equal(otherReservation.canCancel, false);
+  assert.equal(otherReservation.canReport, false);
+  const ownRows = await request(`/api/staff/reservations?user=${encodeURIComponent(userId)}`, staffAccount.token);
+  const ownBody = JSON.parse(ownRows.body);
+  assert.equal(ownBody.reservations.some((item) => item.id === "res-3d-morning"), true);
+  assert.equal(ownBody.reservations.some((item) => item.id === "res-elec-day"), false);
+  assert.equal(ownBody.reservations.every((item) => item.user === signed.account.name), true);
+  const emptyAll = await request("/api/staff/reservations?date=2020-01-01", staffAccount.token);
+  const emptyAllBody = JSON.parse(emptyAll.body);
+  assert.deepEqual(emptyAllBody.reservations, []);
+  assert.equal(emptyAllBody.message, "No reservations yet");
+  assert.equal(emptyAllBody.users.some((item) => item.id === userId), true);
+  const deniedMessage = await request("/api/staff/messages", member.token, {
+    method: "POST",
+    body: { userId, subject: "Hello", text: "The bench is free." }
+  });
+  assert.equal(deniedMessage.status, 403);
+  const incompleteMessage = await request("/api/staff/messages", staffAccount.token, {
+    method: "POST",
+    body: { userId, subject: "", text: "" }
+  });
+  assert.equal(incompleteMessage.status, 422);
+  assert.equal(JSON.parse(incompleteMessage.body).error, "MessageIncomplete");
+  const missingPerson = await request("/api/staff/messages", staffAccount.token, {
+    method: "POST",
+    body: { userId: "missing-person", subject: "Hello", text: "The bench is free." }
+  });
+  assert.equal(missingPerson.status, 404);
+  assert.equal(JSON.parse(missingPerson.body).error, "UserNotFound");
+  let mailedTo = "";
+  const wrote = await writeToUser(userId, { subject: "Bench", text: "The nozzle is ready." }, async (message) => {
+    mailedTo = message.to;
+    return true;
+  });
+  assert.equal(mailedTo, signed.account.email);
+  assert.equal(wrote.mailSent, true);
+  assert.equal(wrote.message, "Email sent.");
+
   console.log("contracts ok");
   } finally {
     if (bookedId) await deleteReservation(bookedId);
@@ -376,6 +566,9 @@ function request(path, token, options = {}) {
     if (cancelId) await deleteReservation(cancelId);
     if (pastCancelId) await deleteReservation(pastCancelId);
     if (reportReservationId) await deleteReservation(reportReservationId);
+    if (blockReservationId) await deleteReservation(blockReservationId);
+    await setMachineBlock("eq-3d-1", { open: true, reason: "", period: "", blockStart: "", blockEnd: "" });
+    await setMachineBlock("eq-elec-1", { open: true, reason: "", period: "", blockStart: "", blockEnd: "" });
     for (const email of disposable) await deleteUserByEmail(email);
     await withUsers((users) => {
       const user = users.find((item) => item.email === "student@university.edu");

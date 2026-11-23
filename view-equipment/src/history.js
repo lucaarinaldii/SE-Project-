@@ -23,6 +23,7 @@ function present(reservation, machines, report) {
     id: reservation.id,
     equipmentId: reservation.equipmentId,
     equipment: machine ? machine.Type : "",
+    serial: machine ? machine.serial || "" : "",
     location: machine ? machine.Location : "",
     date: reservation.date,
     start: reservation.start,
@@ -66,6 +67,56 @@ async function myReservations(userId, filters = {}) {
   };
 }
 
+function userChoices(accounts, rows) {
+  const people = new Map(accounts.map((account) => [account.id, account.name]));
+  for (const row of rows) {
+    if (!people.has(row.userId)) people.set(row.userId, "Unknown user");
+  }
+  return [...people.entries()]
+    .map(([id, name]) => ({ id, name }))
+    .sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id));
+}
+
+async function allReservations(filters = {}) {
+  const date = String(filters.date || "");
+  const equipment = String(filters.equipment || "");
+  const status = String(filters.status || "");
+  const user = String(filters.user || "");
+  if (date && !isIsoDate(date)) throw new ContractError("InvalidDate");
+  if (status && !STATUSES.has(status)) throw new ContractError("UnknownStatus");
+  const machines = await machinesById();
+  if (equipment && !machines.has(equipment)) throw new ContractError("EquipmentNotFound");
+  const rows = await storage.listAllReservationRecords();
+  const users = userChoices(await storage.listAccountNames(), rows);
+  const filtered = rows
+    .filter((item) => !date || item.date === date)
+    .filter((item) => !equipment || item.equipmentId === equipment)
+    .filter((item) => !status || item.status === status)
+    .filter((item) => !user || item.userId === user);
+  const names = new Map(filtered.map((item) => [item.id, item.user || "Unknown user"]));
+  const profiles = new Map(filtered.map((item) => [item.id, item.email ? {
+    id: item.userId,
+    name: item.user || "Unknown user",
+    email: item.email,
+    role: item.role || "user"
+  } : null]));
+  const reservations = (await withReports(filtered, machines))
+    .map((item) => ({
+      ...item,
+      user: names.get(item.id) || "Unknown user",
+      profile: profiles.get(item.id) || null,
+      canConfirm: false,
+      canCancel: false,
+      canReport: false
+    }))
+    .sort((left, right) => `${left.date} ${left.start}`.localeCompare(`${right.date} ${right.start}`));
+  return {
+    reservations,
+    users,
+    message: reservations.length === 0 ? "No reservations yet" : ""
+  };
+}
+
 async function reservationDetails(userId, id) {
   const owned = await storage.listOwnedReservations(userId);
   const reservation = owned.find((item) => item.id === id);
@@ -74,4 +125,4 @@ async function reservationDetails(userId, id) {
   return presented;
 }
 
-module.exports = { myReservations, reservationDetails };
+module.exports = { myReservations, allReservations, reservationDetails };

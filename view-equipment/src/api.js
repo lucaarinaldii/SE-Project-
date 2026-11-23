@@ -1,7 +1,7 @@
 const fs = require("fs/promises");
 const path = require("path");
 const { ContractError } = require("./errors");
-const { buildList, buildDetails, buildAvailability, buildHistory, buildReservation, createReservation, confirmOwnedReservation, cancelOwnedReservation, reportOwnedReservation } = require("./page");
+const { buildList, buildDetails, buildAvailability, buildHistory, buildAllReservations, buildReservation, createReservation, confirmOwnedReservation, cancelOwnedReservation, reportOwnedReservation, buildStaffEquipment, blockStaffEquipment, unblockStaffEquipment, buildTickets, updateTicket, messageStaffUser } = require("./page");
 const { currentAccount, signIn, registerAccount, signOut } = require("./login");
 
 const PUBLIC_DIR = path.join(__dirname, "..", "public");
@@ -29,8 +29,13 @@ const HTTP_STATUS = {
   CannotReport: 409,
   ReportIncomplete: 422,
   ReportExists: 409,
+  BlockIncomplete: 422,
+  BlockAfterSession: 422,
   EquipmentNotFound: 404,
   ReservationNotFound: 404,
+  TicketNotFound: 404,
+  UserNotFound: 404,
+  MessageIncomplete: 422,
   StorageUnavailable: 503,
   Forbidden: 403,
   NotFound: 404
@@ -142,6 +147,20 @@ async function handle(req, res) {
       sendJson(res, 201, await reportOwnedReservation(req, decodeURIComponent(reportMatch[1]), body));
       return;
     }
+    if (req.method === "POST" && url.pathname === "/api/staff/messages") {
+      const body = await readBody(req);
+      sendJson(res, 200, await messageStaffUser(req, body));
+      return;
+    }
+    if (req.method === "GET" && url.pathname === "/api/staff/reservations") {
+      sendJson(res, 200, await buildAllReservations(req, {
+        date: url.searchParams.get("date") ?? "",
+        equipment: url.searchParams.get("equipment") ?? "",
+        status: url.searchParams.get("status") ?? "",
+        user: url.searchParams.get("user") ?? ""
+      }));
+      return;
+    }
     if (req.method === "GET" && url.pathname === "/api/reservations") {
       sendJson(res, 200, await buildHistory(req, {
         date: url.searchParams.get("date") ?? "",
@@ -153,6 +172,36 @@ async function handle(req, res) {
     const reservationMatch = url.pathname.match(/^\/api\/reservations\/([^/]+)$/);
     if (req.method === "GET" && reservationMatch) {
       sendJson(res, 200, await buildReservation(req, decodeURIComponent(reservationMatch[1])));
+      return;
+    }
+    if (req.method === "GET" && url.pathname === "/api/tickets") {
+      sendJson(res, 200, await buildTickets(req, {
+        group: url.searchParams.get("group") ?? "",
+        equipment: url.searchParams.get("equipment") ?? "",
+        date: url.searchParams.get("date") ?? ""
+      }));
+      return;
+    }
+    const ticketMatch = url.pathname.match(/^\/api\/tickets\/([^/]+)\/status$/);
+    if (req.method === "POST" && ticketMatch) {
+      const body = await readBody(req);
+      sendJson(res, 200, await updateTicket(req, decodeURIComponent(ticketMatch[1]), body));
+      return;
+    }
+    if (req.method === "GET" && url.pathname === "/api/staff/equipment") {
+      sendJson(res, 200, await buildStaffEquipment(req));
+      return;
+    }
+    const blockMatch = url.pathname.match(/^\/api\/staff\/equipment\/([^/]+)\/block$/);
+    if (req.method === "POST" && blockMatch) {
+      const body = await readBody(req);
+      sendJson(res, 200, await blockStaffEquipment(req, decodeURIComponent(blockMatch[1]), body));
+      return;
+    }
+    const unblockMatch = url.pathname.match(/^\/api\/staff\/equipment\/([^/]+)\/unblock$/);
+    if (req.method === "POST" && unblockMatch) {
+      const body = await readBody(req);
+      sendJson(res, 200, await unblockStaffEquipment(req, decodeURIComponent(unblockMatch[1])));
       return;
     }
     if (req.method === "GET" && url.pathname === "/api/catalogue") {

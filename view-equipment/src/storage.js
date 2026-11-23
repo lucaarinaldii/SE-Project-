@@ -20,7 +20,8 @@ const SCHEMA = [
   period text NOT NULL DEFAULT '',
   block_start text NOT NULL DEFAULT '',
   block_end text NOT NULL DEFAULT '',
-  position integer NOT NULL
+  position integer NOT NULL,
+  serial_number text NOT NULL DEFAULT ''
 )`,
   `CREATE TABLE IF NOT EXISTS users (
   id text PRIMARY KEY,
@@ -73,7 +74,8 @@ function catalogueRecord(row) {
     Type: row.type,
     Location: row.location,
     Max_Booking_Duration: row.max_booking_duration,
-    description: row.description ?? ""
+    description: row.description ?? "",
+    serial: row.serial_number ?? ""
   };
 }
 
@@ -137,8 +139,13 @@ async function seedEquipment(client, machines) {
     await client.query(
       `INSERT INTO equipment (
         id, type, location, max_booking_duration, min_threshold, description,
-        get_status, is_open, reason, period, block_start, block_end, position
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+        get_status, is_open, reason, period, block_start, block_end, position, serial_number
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+      ON CONFLICT (id) DO UPDATE
+      SET serial_number = CASE
+        WHEN equipment.serial_number = '' THEN EXCLUDED.serial_number
+        ELSE equipment.serial_number
+      END`,
       [
         machine.id,
         machine.Type,
@@ -152,7 +159,8 @@ async function seedEquipment(client, machines) {
         machine.period ?? "",
         machine.blockStart ?? "",
         machine.blockEnd ?? "",
-        index
+        index,
+        machine.serial || ""
       ]
     );
   }
@@ -197,8 +205,9 @@ async function prepareDatabase() {
       await client.query("SELECT pg_advisory_xact_lock($1)", [USER_LOCK]);
       for (const statement of SCHEMA) await client.query(statement);
       await client.query("ALTER TABLE reservations ADD COLUMN IF NOT EXISTS reminder_sent_at text NOT NULL DEFAULT ''");
-      const equipmentCount = await client.query("SELECT COUNT(*)::int AS n FROM equipment");
-      if (equipmentCount.rows[0].n === 0) await seedEquipment(client, await readJson("equipment.json"));
+      await client.query("ALTER TABLE equipment ADD COLUMN IF NOT EXISTS serial_number text NOT NULL DEFAULT ''");
+      await seedEquipment(client, await readJson("equipment.json"));
+      await client.query("CREATE UNIQUE INDEX IF NOT EXISTS equipment_serial_number_key ON equipment (serial_number)");
       const userCount = await client.query("SELECT COUNT(*)::int AS n FROM users");
       if (userCount.rows[0].n === 0) await seedUsers(client, await readJson("users.json"));
       const reservationCount = await client.query("SELECT COUNT(*)::int AS n FROM reservations");
@@ -215,7 +224,7 @@ async function prepareDatabase() {
 
 async function listMachineRecords() {
   const result = await query(
-    `SELECT id, type, location, max_booking_duration, description
+    `SELECT id, type, location, max_booking_duration, description, serial_number
      FROM equipment ORDER BY position, id`
   );
   return result.rows.map(catalogueRecord);
@@ -223,12 +232,22 @@ async function listMachineRecords() {
 
 async function findMachineRecord(id) {
   const result = await query(
-    `SELECT id, type, location, max_booking_duration, description
+    `SELECT id, type, location, max_booking_duration, description, serial_number
      FROM equipment WHERE id = $1`,
     [id]
   );
   if (result.rowCount === 0) throw new ContractError("EquipmentNotFound");
   return catalogueRecord(result.rows[0]);
+}
+
+async function setMachineBlock(id, block) {
+  const result = await query(
+    `UPDATE equipment
+     SET get_status = true, is_open = $2, reason = $3, period = $4, block_start = $5, block_end = $6
+     WHERE id = $1`,
+    [id, block.open === true, block.reason || "", block.period || "", block.blockStart || "", block.blockEnd || ""]
+  );
+  if (result.rowCount !== 1) throw new ContractError("EquipmentNotFound");
 }
 
 async function readStoredStatus(id) {
@@ -239,6 +258,65 @@ async function readStoredStatus(id) {
   );
   if (result.rowCount === 0) throw new ContractError("EquipmentNotFound");
   return statusRecord(result.rows[0]);
+}
+
+async function listPeriodReservations(equipmentId, start, end) {
+  const result = await query(
+    `SELECT r.id, r.student_id, r.reservation_date, r.start_text, r.end_text, r.status,
+            u.email, u.name
+     FROM reservations r
+     LEFT JOIN users u ON u.id = r.student_id
+     WHERE r.equipment_id = $1
+       AND r.status IN ('Awaiting confirmation', 'Confirmed')
+       AND ($2 = '' OR r.reservation_date >= $2)
+       AND ($3 = '' OR r.reservation_date <= $3)
+     ORDER BY r.reservation_date, r.start_minute, r.id`,
+    [equipmentId, start || "", end || ""]
+  );
+  return result.rows.map((row) => ({
+    id: row.id,
+    studentId: row.student_id,
+    date: row.reservation_date,
+    start: row.start_text,
+    end: row.end_text,
+    status: row.status,
+    email: row.email || "",
+    name: row.name || ""
+  }));
+}
+
+async function blockMachineAndCancel(equipmentId, block, ids) {
+  return withClient(async (client) => {
+    try {
+      await client.query("BEGIN");
+      let cancelled = [];
+      if (ids.length > 0) {
+        const result = await client.query(
+          `UPDATE reservations SET status = 'Cancelled'
+           WHERE equipment_id = $1 AND id = ANY($2::text[])
+             AND status IN ('Awaiting confirmation', 'Confirmed')
+           RETURNING id`,
+          [equipmentId, ids]
+        );
+        cancelled = result.rows.map((row) => row.id);
+      }
+      const updated = await client.query(
+        `UPDATE equipment
+         SET get_status = true, is_open = false, reason = $2, period = $3, block_start = $4, block_end = $5
+         WHERE id = $1
+         RETURNING id`,
+        [equipmentId, block.reason, block.period, block.blockStart || "", block.blockEnd || ""]
+      );
+      if (updated.rowCount === 0) throw new ContractError("EquipmentNotFound");
+      await client.query("COMMIT");
+      return cancelled;
+    } catch (error) {
+      try { await client.query("ROLLBACK"); } catch { /* the connection may already be closed */ }
+      if (error instanceof ContractError) throw error;
+      console.error(error.message);
+      throw new ContractError("StorageUnavailable");
+    }
+  });
 }
 
 async function listReservationRecords() {
@@ -404,9 +482,70 @@ async function insertReport(report) {
   });
 }
 
+async function listTicketRecords() {
+  const result = await query(
+    `SELECT r.id, r.equipment_id, r.issue_type, r.description, r.status,
+            e.type AS equipment_type, e.location AS equipment_location, e.serial_number AS equipment_serial,
+            u.id AS account_id, u.name AS user_name, u.email AS user_email, u.role AS user_role,
+            v.reservation_date, v.start_text, v.end_text
+     FROM reports r
+     LEFT JOIN equipment e ON e.id = r.equipment_id
+     LEFT JOIN users u ON u.id = r.user_id
+     LEFT JOIN reservations v ON v.id = r.reservation_id
+     ORDER BY v.reservation_date DESC NULLS LAST, v.start_minute DESC NULLS LAST, r.created_at DESC, r.id`
+  );
+  return result.rows.map((row) => ({
+    id: row.id,
+    equipmentId: row.equipment_id,
+    equipment: row.equipment_type || "",
+    location: row.equipment_location || "",
+    serial: row.equipment_serial || "",
+    userId: row.account_id || "",
+    user: row.user_name || "",
+    email: row.user_email || "",
+    role: row.user_role || "",
+    date: row.reservation_date || "",
+    start: row.start_text || "",
+    end: row.end_text || "",
+    issueType: row.issue_type,
+    description: row.description,
+    status: row.status
+  }));
+}
+
+async function updateTicketStatus(id, status) {
+  const result = await query(
+    `UPDATE reports SET status = $2 WHERE id = $1 RETURNING id`,
+    [id, status]
+  );
+  return result.rowCount === 1;
+}
+
 async function listStaffEmails() {
   const result = await query(`SELECT email FROM users WHERE role = 'staff' ORDER BY email`);
   return result.rows.map((row) => row.email);
+}
+
+async function listAllReservationRecords() {
+  const result = await query(
+    `SELECT r.id, r.equipment_id, r.student_id, r.reservation_date, r.start_text, r.end_text, r.status,
+            u.name AS user_name, u.email AS user_email, u.role AS user_role
+     FROM reservations r
+     LEFT JOIN users u ON u.id = r.student_id
+     ORDER BY r.reservation_date, r.start_minute, r.id`
+  );
+  return result.rows.map((row) => ({
+    ...reservationRecord(row),
+    userId: row.student_id,
+    user: row.user_name || "",
+    email: row.user_email || "",
+    role: row.user_role || ""
+  }));
+}
+
+async function listAccountNames() {
+  const result = await query(`SELECT id, name FROM users ORDER BY name, id`);
+  return result.rows.map((row) => ({ id: row.id, name: row.name }));
 }
 
 async function listOwnedReservations(userId) {
@@ -471,6 +610,9 @@ module.exports = {
   listMachineRecords,
   findMachineRecord,
   readStoredStatus,
+  setMachineBlock,
+  listPeriodReservations,
+  blockMachineAndCancel,
   listReservationRecords,
   insertReservation,
   deleteReservation,
@@ -484,7 +626,11 @@ module.exports = {
   listReportsFor,
   findReportByReservation,
   insertReport,
+  listTicketRecords,
+  updateTicketStatus,
   listStaffEmails,
+  listAllReservationRecords,
+  listAccountNames,
   listOwnedReservations,
   withUsers,
   findUserById,

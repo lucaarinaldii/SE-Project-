@@ -37,7 +37,7 @@
           <p class="note">At least 8 characters.</p>
           <button class="primary" type="submit">Create account</button>
         </form>
-        <p class="note">Existing account: student@university.edu, password makerspace.</p>
+        <p class="note">Existing account: student@university.edu, password makerspace. Staff account: staff@university.edu, password makerspace.</p>
       </div>
     </section>
     <main id="appShell" class="app" hidden>
@@ -105,7 +105,12 @@
               <p class="note"><span id="accountEmail"></span> · <span id="accountRole"></span></p>
             </div>
           </div>
-          <button id="signOut" class="ghost" type="button">Sign out</button>
+          <div class="account-actions">
+            <button id="openStaff" class="ghost" type="button" hidden>Staff</button>
+            <button id="openTickets" class="ghost" type="button" hidden>View tickets</button>
+            <button id="openAllReservations" class="ghost" type="button" hidden>All reservations</button>
+            <button id="signOut" class="ghost" type="button">Sign out</button>
+          </div>
         </div>
         <section class="account-filters" aria-label="Reservation filters">
           <div class="filter-block">
@@ -123,6 +128,12 @@
               </button>
             </div>
             <input id="historyDate" hidden>
+          </div>
+          <div id="historyUserBlock" class="filter-block" hidden>
+            <label id="historyUserLabel" class="filter-label" for="historyUser">User</label>
+            <select id="historyUser">
+              <option value="">All users</option>
+            </select>
           </div>
           <div class="filter-block">
             <p id="historyEquipmentLabel" class="filter-label">Equipment</p>
@@ -153,7 +164,7 @@
         <div class="workspace account-workspace">
           <section class="catalogue" aria-label="My reservations">
             <div class="section-head">
-              <h2>Reservations</h2>
+              <h2 id="historyHeading">Reservations</h2>
             </div>
             <div id="historyList" class="list"></div>
           </section>
@@ -162,6 +173,60 @@
               <p class="eyebrow">Reservation</p>
               <h2>Pick one</h2>
               <p>Open a reservation to see the machine, the time, and the status.</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="staffView" hidden>
+        <p id="staffMessage" class="banner is-open" role="status" hidden></p>
+        <div class="workspace">
+          <section class="catalogue" aria-label="Machines">
+            <div class="section-head">
+              <h2>Machines</h2>
+            </div>
+            <div id="staffList" class="list"></div>
+          </section>
+          <article id="staffDetails" class="details">
+            <div class="empty">
+              <p class="eyebrow">Machine</p>
+              <h2>Pick one</h2>
+              <p>Choose a machine to block it or open it again.</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="ticketsView" hidden>
+        <div class="chip-row ticket-tabs" role="tablist" aria-label="Ticket history">
+          <button id="ticketsOpenTab" class="chip is-selected" type="button" role="tab" aria-selected="true">Open</button>
+          <button id="ticketsCompletedTab" class="chip" type="button" role="tab" aria-selected="false">Completed</button>
+        </div>
+        <section class="controls ticket-controls" aria-label="Ticket filters">
+          <div class="field">
+            <label for="ticketEquipment">Equipment</label>
+            <select id="ticketEquipment">
+              <option value="">All equipment</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="ticketDate">Date</label>
+            <input id="ticketDate" type="date">
+          </div>
+        </section>
+        <p id="ticketsMessage" class="banner is-warning" role="status" hidden></p>
+        <div class="workspace">
+          <section class="catalogue" aria-label="Tickets">
+            <div class="section-head">
+              <h2>Tickets</h2>
+            </div>
+            <div id="ticketsList" class="list"></div>
+          </section>
+          <article id="ticketsDetails" class="details">
+            <div class="empty">
+              <p class="eyebrow">Ticket</p>
+              <h2>Pick one</h2>
+              <p>Open a ticket to see the equipment, the user, and the report.</p>
             </div>
           </article>
         </div>

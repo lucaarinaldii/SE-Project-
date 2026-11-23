@@ -210,6 +210,13 @@ button, input, select { font: inherit; color: inherit; }
   min-width: 0;
 }
 
+.account-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-left: auto;
+}
+
 .account-panel h2 { font-size: 1.35rem; }
 .account-panel .note { margin-top: 2px; }
 
@@ -297,6 +304,13 @@ button, input, select { font: inherit; color: inherit; }
   grid-template-columns: minmax(220px, 360px);
   gap: var(--space-md);
   margin-top: var(--space-lg);
+}
+
+.ticket-tabs { margin-top: var(--space-lg); }
+
+.ticket-controls {
+  grid-template-columns: repeat(2, minmax(180px, 280px));
+  margin-top: var(--space-md);
 }
 
 .field {
@@ -666,12 +680,73 @@ textarea {
 
 .is-invalid { border-color: var(--color-destructive); }
 
+.profile-card {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-sm);
+  margin-top: var(--space-lg);
+  padding: var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-muted);
+}
+
+.profile-card h3 {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 1.15rem;
+}
+
+.profile-card a { color: var(--color-primary); }
+
+.profile-mail { width: 100%; }
+
 .report-saved {
   display: grid;
   justify-items: start;
   gap: var(--space-sm);
   margin-top: var(--space-lg);
 }
+
+.block-form {
+  display: grid;
+  gap: var(--space-sm);
+  margin-top: var(--space-lg);
+}
+
+.block-check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin: 0;
+}
+
+.block-check input {
+  width: 18px;
+  min-height: 18px;
+  padding: 0;
+}
+
+.block-choice {
+  display: grid;
+  gap: var(--space-sm);
+  margin: 0;
+  padding: var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+
+.block-choice legend { font-weight: 600; }
+
+.block-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  align-items: center;
+}
+
+.block-actions .primary,
+.block-actions .ghost { margin-top: 0; }
 
 .day-heading {
   margin: var(--space-md) 0 var(--space-sm);
@@ -871,6 +946,7 @@ button.slot:disabled { cursor: wait; opacity: 0.7; }
   .day-number { font-size: 1rem; }
   .primary { width: 100%; }
   .account-panel { flex-direction: column; align-items: stretch; }
+  .account-actions { margin-left: 0; }
   .details dl { grid-template-columns: 1fr; }
   .details dt { padding-bottom: 0; border-bottom: 0; }
   .details dd { padding-top: 2px; }

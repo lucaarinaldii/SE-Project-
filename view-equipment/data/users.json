@@ -7,5 +7,23 @@
     "role": "user",
     "failedAttempts": 0,
     "lockedUntil": ""
+  },
+  {
+    "id": "user-e9ea279f",
+    "name": "stanislav",
+    "email": "afjafowq@gmail.com",
+    "passwordHash": "scrypt$9a998a4721e849a50a6950055df181c1$fe86221a2567c2910a7ad07e2515df74bdc0733005e28c563216be5155f88b4d",
+    "role": "user",
+    "failedAttempts": 0,
+    "lockedUntil": ""
+  },
+  {
+    "id": "user-staff",
+    "name": "Campus Staff",
+    "email": "staff@university.edu",
+    "passwordHash": "scrypt$28750887f46e6d9f2d7f9e0ae0d4256d$3ef2ac5b286b671b71c477d715550de5ca5db4e2a05ec8164947a0006250b978",
+    "role": "staff",
+    "failedAttempts": 0,
+    "lockedUntil": ""
   }
 ]

@@ -7,6 +7,20 @@ const pageTitle = document.querySelector("#pageTitle");
 const pageLede = document.querySelector("#pageLede");
 const chooseView = document.querySelector("#chooseView");
 const accountView = document.querySelector("#accountView");
+const staffView = document.querySelector("#staffView");
+const staffMessage = document.querySelector("#staffMessage");
+const staffList = document.querySelector("#staffList");
+const staffDetails = document.querySelector("#staffDetails");
+const ticketsView = document.querySelector("#ticketsView");
+const ticketsMessage = document.querySelector("#ticketsMessage");
+const ticketsList = document.querySelector("#ticketsList");
+const ticketsDetails = document.querySelector("#ticketsDetails");
+let ticketGroup = "open";
+let selectedTicketId = "";
+let accountRole = "";
+let historyScope = "mine";
+let historyRows = [];
+let pendingProfileUser = "";
 const historyMessage = document.querySelector("#historyMessage");
 const historyList = document.querySelector("#historyList");
 const historyDetails = document.querySelector("#historyDetails");
@@ -62,11 +76,17 @@ function fillAccount(account) {
   document.querySelector("#accountName").textContent = account.name;
   document.querySelector("#accountEmail").textContent = account.email;
   document.querySelector("#accountRole").textContent = roleLabel(account.role);
+  accountRole = account.role;
+  document.querySelector("#openStaff").hidden = account.role !== "staff";
+  document.querySelector("#openTickets").hidden = account.role !== "staff";
+  document.querySelector("#openAllReservations").hidden = account.role !== "staff";
 }
 
 function showChoose() {
   chooseView.hidden = false;
   accountView.hidden = true;
+  staffView.hidden = true;
+  ticketsView.hidden = true;
   document.querySelector("#backToChoices").hidden = true;
   pageTitle.textContent = "Choose what to book";
   pageLede.textContent = "Pick a machine. Open it to see the day and take a free slot.";
@@ -78,7 +98,12 @@ function showChoose() {
 function showAccount() {
   chooseView.hidden = true;
   accountView.hidden = false;
+  staffView.hidden = true;
+  ticketsView.hidden = true;
   document.querySelector("#backToChoices").hidden = false;
+  historyScope = "mine";
+  document.querySelector("#historyUserBlock").hidden = true;
+  document.querySelector("#historyHeading").textContent = "Reservations";
   pageTitle.textContent = "My reservations";
   pageLede.textContent = "Your bookings, past and upcoming.";
   document.title = "My reservations";
@@ -87,11 +112,72 @@ function showAccount() {
   loadHistory().catch(showHistoryError);
 }
 
+function showAllReservations() {
+  if (accountRole !== "staff") {
+    showAccount();
+    return;
+  }
+  chooseView.hidden = true;
+  accountView.hidden = false;
+  staffView.hidden = true;
+  ticketsView.hidden = true;
+  historyScope = "all";
+  document.querySelector("#historyUserBlock").hidden = false;
+  document.querySelector("#historyHeading").textContent = "All reservations";
+  document.querySelector("#backToChoices").hidden = false;
+  pageTitle.textContent = "All reservations";
+  pageLede.textContent = "Every booking, for every user.";
+  document.title = "All reservations";
+  if (location.hash !== "#/reservations") location.hash = "#/reservations";
+  window.scrollTo(0, 0);
+  loadHistory().catch(showHistoryError);
+}
+
+function showStaff() {
+  if (accountRole !== "staff") {
+    showAccount();
+    return;
+  }
+  chooseView.hidden = true;
+  accountView.hidden = true;
+  staffView.hidden = false;
+  ticketsView.hidden = true;
+  document.querySelector("#backToChoices").hidden = false;
+  pageTitle.textContent = "Staff";
+  pageLede.textContent = "Block a machine, or open it again.";
+  document.title = "Staff";
+  if (location.hash !== "#/staff") location.hash = "#/staff";
+  window.scrollTo(0, 0);
+  setBanner(staffMessage, "");
+  loadStaff().catch(showStaffError);
+}
+
+function showTickets() {
+  if (accountRole !== "staff") {
+    showAccount();
+    return;
+  }
+  chooseView.hidden = true;
+  accountView.hidden = true;
+  staffView.hidden = true;
+  ticketsView.hidden = false;
+  document.querySelector("#backToChoices").hidden = false;
+  pageTitle.textContent = "View tickets";
+  pageLede.textContent = "Open reports stay here. Completed ones stay under Completed.";
+  document.title = "View tickets";
+  if (location.hash !== "#/tickets") location.hash = "#/tickets";
+  window.scrollTo(0, 0);
+  loadTickets().catch(showTicketsError);
+}
+
 function showSignedIn(account) {
   auth.hidden = true;
   appShell.hidden = false;
   fillAccount(account);
   if (location.hash === "#/account") showAccount();
+  else if (location.hash === "#/staff") showStaff();
+  else if (location.hash === "#/tickets") showTickets();
+  else if (location.hash === "#/reservations") showAllReservations();
   else showChoose();
 }
 
@@ -414,6 +500,9 @@ function showHistoryError(error) {
     UnknownStatus: "Unknown status.",
     EquipmentNotFound: "Equipment not found.",
     ReservationNotFound: "Reservation not found.",
+    Forbidden: "Only staff can see every reservation.",
+    MessageIncomplete: "Enter a subject and a message.",
+    UserNotFound: "This person has no account.",
     StorageUnavailable: "Service unavailable."
   }[error.code];
   setBanner(historyMessage, text || "Something went wrong.", "is-blocked");
@@ -423,7 +512,7 @@ async function fillEquipmentChoices() {
   if (historyEquipment.dataset.ready === "true") return;
   const data = await readJson(await fetch("/api/catalogue?type=", { headers: sessionHeader() }));
   historyEquipment.insertAdjacentHTML("beforeend", data.equipment.map((item) => (
-    `<option value="${escapeHtml(item.id)}">${escapeHtml(item.type)}</option>`
+    `<option value="${escapeHtml(item.id)}">${escapeHtml(item.type)} · ${escapeHtml(item.serial)}</option>`
   )).join(""));
   historyEquipment.dataset.ready = "true";
 }
@@ -441,7 +530,16 @@ async function loadHistory(options = {}) {
   if (historyEquipment.value) params.set("equipment", historyEquipment.value);
   const status = document.querySelector("#historyStatus").value;
   if (status) params.set("status", status);
-  const data = await readJson(await fetch(`/api/reservations?${params}`, { headers: sessionHeader() }));
+  const user = pendingProfileUser || document.querySelector("#historyUser").value;
+  if (historyScope === "all" && user) params.set("user", user);
+  const path = historyScope === "all" ? "/api/staff/reservations" : "/api/reservations";
+  const data = await readJson(await fetch(`${path}?${params}`, { headers: sessionHeader() }));
+  historyRows = data.reservations || [];
+  if (historyScope === "all" && data.users) fillHistoryUsers(data.users);
+  if (pendingProfileUser) {
+    document.querySelector("#historyUser").value = pendingProfileUser;
+    pendingProfileUser = "";
+  }
   if (data.message) {
     historyList.innerHTML = "";
     if (!options.silent) setBanner(historyMessage, data.message, "is-warning");
@@ -454,6 +552,8 @@ async function loadHistory(options = {}) {
         ${reservationDateTile(item.date)}
         <span class="reservation-body">
           <span class="card-title">${escapeHtml(item.equipment)}</span>
+          ${item.serial ? `<span class="card-location">${escapeHtml(item.serial)}</span>` : ""}
+          ${historyScope === "all" ? `<span class="card-location">${escapeHtml(item.user)}</span>` : ""}
           <span class="badge ${statusClass(item.status)}">${escapeHtml(item.status)}</span>
           <span class="reservation-time"><span class="slot-time">${escapeHtml(item.start)}</span><span class="slot-until">until ${escapeHtml(item.end)}</span></span>
         </span>
@@ -461,7 +561,7 @@ async function loadHistory(options = {}) {
       ${reservationActions(item)}
     </div>
   `).join("");
-  if (!options.silent || !openId) return;
+  if (!options.silent || !openId || historyScope === "all") return;
   const open = data.reservations.find((item) => item.id === openId);
   const showingConfirm = Boolean(historyDetails.querySelector("#confirmReservation"));
   const showingCancel = Boolean(historyDetails.querySelector("#cancelReservation"));
@@ -482,8 +582,24 @@ function reservationActions(item) {
   return confirm || cancel ? `<div class="card-actions">${confirm}${cancel}</div>` : "";
 }
 
+function fillHistoryUsers(users) {
+  const select = document.querySelector("#historyUser");
+  const chosen = select.value;
+  select.innerHTML = [`<option value="">All users</option>`].concat(users.map((user) => (
+    `<option value="${escapeHtml(user.id)}">${escapeHtml(user.name)}</option>`
+  ))).join("");
+  if ([...select.options].some((option) => option.value === chosen)) select.value = chosen;
+}
+
 async function loadReservation(id) {
-  const item = await readJson(await fetch(`/api/reservations/${encodeURIComponent(id)}`, { headers: sessionHeader() }));
+  const item = historyScope === "all"
+    ? historyRows.find((row) => row.id === id)
+    : await readJson(await fetch(`/api/reservations/${encodeURIComponent(id)}`, { headers: sessionHeader() }));
+  if (!item) {
+    showEmptyHistory();
+    return;
+  }
+  const readOnly = historyScope === "all";
   historyDetails.dataset.id = item.id;
   document.querySelectorAll("#historyList .card").forEach((card) => {
     const selected = card.dataset.reservation === item.id;
@@ -499,16 +615,18 @@ async function loadReservation(id) {
       <div>
         <p class="day-heading">${formatLongDay(parseIsoDate(item.date))}</p>
         <p class="reservation-time"><span class="slot-time">${escapeHtml(item.start)}</span><span class="slot-until">until ${escapeHtml(item.end)}</span></p>
+        <p class="card-location">${escapeHtml(item.serial || "")}</p>
         <p class="card-location">${escapeHtml(item.location || "—")}</p>
         <span class="badge ${statusClass(item.status)}">${escapeHtml(item.status)}</span>
       </div>
     </div>
+    ${readOnly ? profilePanel(item.profile) : ""}
     <div class="reservation-actions">
-      ${item.canConfirm ? `<button id="confirmReservation" class="primary" type="button">Confirm</button>` : ""}
-      ${item.canCancel ? `<button id="cancelReservation" class="cancel-reservation" type="button">Cancel reservation</button>` : ""}
-      ${item.canReport ? `<button id="showReport" class="primary" type="button">Report</button>` : ""}
+      ${readOnly || !item.canConfirm ? "" : `<button id="confirmReservation" class="primary" type="button">Confirm</button>`}
+      ${readOnly || !item.canCancel ? "" : `<button id="cancelReservation" class="cancel-reservation" type="button">Cancel reservation</button>`}
+      ${readOnly || !item.canReport ? "" : `<button id="showReport" class="primary" type="button">Report</button>`}
     </div>
-    ${item.canReport ? `
+    ${!readOnly && item.canReport ? `
       <form id="reportForm" class="report-form" hidden>
         <label for="issueType">Issue type</label>
         <select id="issueType">
@@ -525,7 +643,7 @@ async function loadReservation(id) {
     ${item.report ? `
       <section class="report-saved">
         <p class="eyebrow">Report</p>
-        <span class="badge is-awaiting">${escapeHtml(item.report.status)}</span>
+        <span class="badge ${ticketStatusClass(item.report.status)}">${escapeHtml(item.report.status)}</span>
         <p class="card-title">${escapeHtml(item.report.issueType)}</p>
         <p>${escapeHtml(item.report.description)}</p>
       </section>
@@ -610,10 +728,11 @@ async function loadCatalogue() {
     return `
       <button class="card" type="button" data-id="${item.id}">
         <span class="card-top">
-          <span class="card-title">${item.type}</span>
+          <span class="card-title">${escapeHtml(item.type)}</span>
           <span class="badge ${item.status}">${mark(open ? "open" : "blocked")}${open ? "Open" : "Blocked"}</span>
         </span>
-        <span class="card-location">${item.location}</span>
+        <span class="card-location">${escapeHtml(item.serial)}</span>
+        <span class="card-location">${escapeHtml(item.location)}</span>
         <span class="card-status">${statusLabel(item)}</span>
       </button>
     `;
@@ -629,9 +748,10 @@ async function loadDetails(id) {
   markSelected(item.id);
   details.innerHTML = `
     <p class="eyebrow">Machine</p>
-    <h2>${item.type}</h2>
+    <h2>${escapeHtml(item.type)}</h2>
     <dl>
-      <dt>Location</dt><dd>${item.location}</dd>
+      <dt>Serial number</dt><dd>${escapeHtml(item.serial)}</dd>
+      <dt>Location</dt><dd>${escapeHtml(item.location)}</dd>
       <dt>Description</dt><dd>${item.description || "—"}</dd>
       <dt>Rules of use</dt><dd>${item.rules || "—"}</dd>
       <dt>Status</dt><dd>${statusLabel(item)}</dd>
@@ -783,6 +903,445 @@ document.querySelector("#signOut").addEventListener("click", async () => {
   showSignedOut();
 });
 
+document.querySelector("#openStaff").addEventListener("click", () => {
+  if (location.hash !== "#/staff") location.hash = "#/staff";
+});
+
+document.querySelector("#openTickets").addEventListener("click", () => {
+  if (location.hash !== "#/tickets") location.hash = "#/tickets";
+});
+
+document.querySelector("#openAllReservations").addEventListener("click", () => {
+  if (location.hash !== "#/reservations") location.hash = "#/reservations";
+});
+
+function ticketStatusClass(status) {
+  if (status === "Resolved") return "is-completed";
+  if (status === "Rejected") return "is-cancelled";
+  if (status === "In progress") return "is-confirmed";
+  if (status === "Maintenance requested") return "blocked";
+  return "is-awaiting";
+}
+
+function ticketWhen(item) {
+  if (!item.date) return "";
+  const clock = item.start && item.end ? ` · ${item.start}–${item.end}` : "";
+  return `${formatLongDay(parseIsoDate(item.date))}${clock}`;
+}
+
+function showTicketsError(error) {
+  const text = {
+    NoSession: "Sign in to see the tickets.",
+    Forbidden: "Only staff can view tickets.",
+    TicketNotFound: "Ticket not found.",
+    MessageIncomplete: "Enter a subject and a message.",
+    UserNotFound: "This person has no account.",
+    UnknownStatus: "Choose a known status.",
+    EquipmentNotFound: "Equipment not found.",
+    InvalidDate: "Enter a valid date.",
+    StorageUnavailable: "Service unavailable."
+  }[error.code];
+  setBanner(ticketsMessage, text || "Something went wrong.", "is-blocked");
+}
+
+function renderTicketDetails(item) {
+  const actions = ["In progress", "Maintenance requested", "Resolved", "Rejected"]
+    .filter((status) => status !== item.status)
+    .map((status) => `<button class="${status === "Resolved" ? "primary" : "ghost"}" type="button" data-ticket-status="${escapeHtml(status)}">${escapeHtml(status)}</button>`)
+    .join("");
+  const finished = item.status === "Resolved" || item.status === "Rejected";
+  ticketsDetails.innerHTML = `
+    <p class="eyebrow">Ticket</p>
+    <h2>${escapeHtml(item.equipment || "Equipment")}</h2>
+    <p class="card-location">${escapeHtml(item.serial || "")}</p>
+    <p class="card-location">${escapeHtml(item.location)}</p>
+    <p><span class="badge ${ticketStatusClass(item.status)}">${escapeHtml(item.status)}</span></p>
+    ${profilePanel(item.profile)}
+    <p class="card-status">${escapeHtml(ticketWhen(item))}</p>
+    <p class="card-title">${escapeHtml(item.issueType)}</p>
+    <p>${escapeHtml(item.description)}</p>
+    ${finished ? "<p>This report stays in Completed.</p>" : ""}
+    <div class="block-actions">${actions}</div>
+  `;
+}
+
+async function loadTickets() {
+  const params = new URLSearchParams({ group: ticketGroup });
+  const equipment = document.querySelector("#ticketEquipment").value;
+  const date = document.querySelector("#ticketDate").value;
+  if (equipment) params.set("equipment", equipment);
+  if (date) params.set("date", date);
+  const data = await readJson(await fetch(`/api/tickets?${params}`, { headers: sessionHeader() }));
+  const select = document.querySelector("#ticketEquipment");
+  const chosen = select.value;
+  select.innerHTML = [`<option value="">All equipment</option>`].concat(data.equipment.map((item) => (
+    `<option value="${escapeHtml(item.id)}">${escapeHtml(item.type)} · ${escapeHtml(item.serial)}</option>`
+  ))).join("");
+  if ([...select.options].some((option) => option.value === chosen)) select.value = chosen;
+  for (const [id, group] of [["ticketsOpenTab", "open"], ["ticketsCompletedTab", "completed"]]) {
+    const tab = document.querySelector(`#${id}`);
+    const selected = ticketGroup === group;
+    tab.classList.toggle("is-selected", selected);
+    tab.setAttribute("aria-selected", selected ? "true" : "false");
+  }
+  ticketsList.innerHTML = data.tickets.map((item) => `
+    <button class="card${item.id === selectedTicketId ? " is-selected" : ""}" type="button" data-ticket="${escapeHtml(item.id)}" ${item.id === selectedTicketId ? "aria-current=\"true\"" : ""}>
+      <span class="card-top">
+        <span class="card-title">${escapeHtml(item.equipment || "Equipment")}${item.serial ? ` · ${escapeHtml(item.serial)}` : ""}</span>
+        <span class="badge ${ticketStatusClass(item.status)}">${escapeHtml(item.status)}</span>
+      </span>
+      <span class="card-location">${escapeHtml(item.user)}</span>
+      <span class="card-status">${escapeHtml(ticketWhen(item))}</span>
+    </button>
+  `).join("");
+  setBanner(ticketsMessage, data.message, "is-warning");
+  const selected = data.tickets.find((item) => item.id === selectedTicketId);
+  if (selected) renderTicketDetails(selected);
+  else {
+    selectedTicketId = "";
+    ticketsDetails.innerHTML = `
+      <div class="empty">
+        <p class="eyebrow">Ticket</p>
+        <h2>Pick one</h2>
+        <p>Open a ticket to see the equipment, the user, and the report.</p>
+      </div>
+    `;
+  }
+  return data;
+}
+
+ticketsList.addEventListener("click", (event) => {
+  const card = event.target.closest("[data-ticket]");
+  if (!card) return;
+  selectedTicketId = card.dataset.ticket;
+  loadTickets().catch(showTicketsError);
+});
+
+document.querySelector("#ticketsOpenTab").addEventListener("click", () => {
+  ticketGroup = "open";
+  selectedTicketId = "";
+  loadTickets().catch(showTicketsError);
+});
+
+document.querySelector("#ticketsCompletedTab").addEventListener("click", () => {
+  ticketGroup = "completed";
+  selectedTicketId = "";
+  loadTickets().catch(showTicketsError);
+});
+
+document.querySelector("#ticketEquipment").addEventListener("change", () => loadTickets().catch(showTicketsError));
+document.querySelector("#ticketDate").addEventListener("change", () => loadTickets().catch(showTicketsError));
+
+function profilePanel(profile) {
+  if (!profile) {
+    return `
+      <section class="profile-card">
+        <p class="eyebrow">Profile</p>
+        <h3>Unknown user</h3>
+        <p>This person has no account, so staff cannot email them.</p>
+      </section>
+    `;
+  }
+  return `
+    <section class="profile-card">
+      <p class="eyebrow">Profile</p>
+      <h3>${escapeHtml(profile.name)}</h3>
+      <p><a href="mailto:${escapeHtml(profile.email)}">${escapeHtml(profile.email)}</a></p>
+      <p class="note">${escapeHtml(roleLabel(profile.role))}</p>
+      <div class="block-actions">
+        <button class="ghost" type="button" data-profile-reservations="${escapeHtml(profile.id)}">Reservations</button>
+        <button class="primary" type="button" data-write-email>Write email</button>
+      </div>
+      <form class="report-form profile-mail" hidden>
+        <label>Subject</label>
+        <input class="profile-subject" maxlength="120">
+        <label>Message</label>
+        <textarea class="profile-text"></textarea>
+        <button class="primary" type="submit">Send email</button>
+      </form>
+    </section>
+  `;
+}
+
+function openProfileReservations(userId) {
+  pendingProfileUser = userId;
+  if (location.hash !== "#/reservations") location.hash = "#/reservations";
+  else showAllReservations();
+}
+
+async function sendProfileEmail(form, banner, showError) {
+  const subject = form.querySelector(".profile-subject");
+  const text = form.querySelector(".profile-text");
+  const card = form.closest(".profile-card");
+  const userId = card.querySelector("[data-profile-reservations]")?.dataset.profileReservations || "";
+  const missingSubject = !subject.value.trim();
+  const missingText = !text.value.trim();
+  subject.classList.toggle("is-invalid", missingSubject);
+  text.classList.toggle("is-invalid", missingText);
+  if (missingSubject || missingText || !userId) {
+    setBanner(banner, "Enter a subject and a message.", "is-blocked");
+    return;
+  }
+  const button = form.querySelector("button");
+  if (button) button.disabled = true;
+  try {
+    const data = await readJson(await fetch("/api/staff/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...sessionHeader() },
+      body: JSON.stringify({ userId, subject: subject.value.trim(), text: text.value.trim() })
+    }));
+    form.hidden = true;
+    subject.value = "";
+    text.value = "";
+    setBanner(banner, data.message, data.mailSent ? "is-open" : "is-warning");
+  } catch (error) {
+    if (button) button.disabled = false;
+    showError(error);
+  }
+}
+
+ticketsDetails.addEventListener("click", async (event) => {
+  const reservations = event.target.closest("[data-profile-reservations]");
+  if (reservations) {
+    openProfileReservations(reservations.dataset.profileReservations);
+    return;
+  }
+  const write = event.target.closest("[data-write-email]");
+  if (write) {
+    write.closest(".profile-card").querySelector(".profile-mail").hidden = false;
+    return;
+  }
+  const button = event.target.closest("[data-ticket-status]");
+  if (!button || !selectedTicketId) return;
+  button.disabled = true;
+  const status = button.dataset.ticketStatus;
+  const id = selectedTicketId;
+  try {
+    const data = await readJson(await awaitFetchTicket(id, status));
+    if (status === "Resolved" || status === "Rejected") ticketGroup = "completed";
+    selectedTicketId = id;
+    await loadTickets();
+    setBanner(ticketsMessage, data.message, "is-open");
+  } catch (error) {
+    button.disabled = false;
+    showTicketsError(error);
+  }
+});
+
+ticketsDetails.addEventListener("submit", (event) => {
+  const form = event.target.closest(".profile-mail");
+  if (!form) return;
+  event.preventDefault();
+  sendProfileEmail(form, ticketsMessage, showTicketsError);
+});
+
+function awaitFetchTicket(id, status) {
+  return fetch(`/api/tickets/${encodeURIComponent(id)}/status`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...sessionHeader() },
+    body: JSON.stringify({ status })
+  });
+}
+
+function showStaffError(error) {
+  const text = {
+    NoSession: "Sign in to see the staff panel.",
+    Forbidden: "Only staff can block a machine.",
+    EquipmentNotFound: "Equipment not found.",
+    BlockIncomplete: "Enter the reason and the block period.",
+    BlockAfterSession: "The period ends before the current session ends.",
+    StorageUnavailable: "Service unavailable."
+  }[error.code];
+  setBanner(staffMessage, text || "Something went wrong.", "is-blocked");
+}
+
+function staffBadge(item) {
+  if (item.status === "blocked") return `<span class="badge blocked">${mark("blocked")}Blocked</span>`;
+  return `<span class="badge open">${mark("open")}Open</span>`;
+}
+
+async function loadStaff() {
+  const data = await readJson(await fetch("/api/staff/equipment", { headers: sessionHeader() }));
+  const selected = staffDetails.dataset.id || "";
+  staffList.innerHTML = data.equipment.map((item) => `
+    <button class="card${item.id === selected ? " is-selected" : ""}" type="button" data-staff="${escapeHtml(item.id)}" ${item.id === selected ? "aria-current=\"true\"" : ""}>
+      <span class="card-top">
+        <span class="card-title">${escapeHtml(item.type)}</span>
+        ${staffBadge(item)}
+      </span>
+      <span class="card-location">${escapeHtml(item.serial)}</span>
+      <span class="card-location">${escapeHtml(item.location)}</span>
+      <span class="card-status">${escapeHtml(statusLabel(item))}</span>
+    </button>
+  `).join("");
+  const current = data.equipment.find((item) => item.id === selected);
+  if (current) renderStaffDetails(current);
+}
+
+function renderStaffDetails(item) {
+  staffDetails.dataset.id = item.id;
+  const openEnded = item.status === "blocked" && !item.blockStart && !item.blockEnd;
+  staffDetails.innerHTML = `
+    <p class="eyebrow">Machine</p>
+    <h2>${escapeHtml(item.type)}</h2>
+    <p class="card-location">${escapeHtml(item.serial)}</p>
+    <p class="card-location">${escapeHtml(item.location)}</p>
+    <p>${staffBadge(item)}</p>
+    ${item.status === "blocked" ? `<p class="card-status">${escapeHtml(statusLabel(item))}</p><p>This machine is already blocked. You can change the reason or the period.</p>` : ""}
+    <form id="blockForm" class="block-form">
+      <label for="blockReason">Reason</label>
+      <input id="blockReason" value="${escapeHtml(item.reason || "")}">
+      <label class="block-check" for="blockOpenEnded">
+        <input id="blockOpenEnded" type="checkbox"${openEnded ? " checked" : ""}>
+        Until further notice
+      </label>
+      <label for="blockStart">From</label>
+      <input id="blockStart" type="date" value="${escapeHtml(item.blockStart || "")}"${openEnded ? " disabled" : ""}>
+      <label for="blockEnd">Until</label>
+      <input id="blockEnd" type="date" value="${escapeHtml(item.blockEnd || "")}"${openEnded ? " disabled" : ""}>
+      <div class="block-actions">
+        <button class="primary" type="submit">Block machine</button>
+        ${item.status === "blocked" ? `<button id="unblockMachine" class="ghost" type="button">Unblock</button>` : ""}
+      </div>
+    </form>
+  `;
+}
+
+staffList.addEventListener("click", (event) => {
+  const card = event.target.closest("[data-staff]");
+  if (!card) return;
+  setBanner(staffMessage, "");
+  staffDetails.dataset.id = card.dataset.staff;
+  loadStaff().catch(showStaffError);
+});
+
+staffDetails.addEventListener("change", (event) => {
+  if (event.target.id !== "blockOpenEnded") return;
+  const off = event.target.checked;
+  document.querySelector("#blockStart").disabled = off;
+  document.querySelector("#blockEnd").disabled = off;
+});
+
+staffDetails.addEventListener("click", (event) => {
+  const confirmButton = event.target.closest("#confirmBlock");
+  if (confirmButton) {
+    const when = document.querySelector("input[name='blockWhen']:checked");
+    const cancelIds = [...document.querySelectorAll("[data-cancel-id]:checked")].map((item) => item.dataset.cancelId);
+    confirmButton.disabled = true;
+    blockMachine(staffDetails.dataset.id, {
+      ...blockFields(),
+      confirm: true,
+      when: when ? when.value : "now",
+      cancelIds
+    }).catch((error) => {
+      confirmButton.disabled = false;
+      showStaffError(error);
+    });
+    return;
+  }
+  const button = event.target.closest("#unblockMachine");
+  if (!button) return;
+  button.disabled = true;
+  unblockMachine(staffDetails.dataset.id).catch((error) => {
+    button.disabled = false;
+    showStaffError(error);
+  });
+});
+
+async function unblockMachine(id) {
+  const data = await readJson(await fetch(`/api/staff/equipment/${encodeURIComponent(id)}/unblock`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...sessionHeader() },
+    body: "{}"
+  }));
+  await loadStaff();
+  setBanner(staffMessage, data.message, "is-open");
+}
+
+staffDetails.addEventListener("submit", (event) => {
+  const form = event.target.closest("#blockForm");
+  if (!form) return;
+  event.preventDefault();
+  const reason = document.querySelector("#blockReason");
+  const openEnded = document.querySelector("#blockOpenEnded").checked;
+  const start = document.querySelector("#blockStart");
+  const end = document.querySelector("#blockEnd");
+  const missingReason = !reason.value.trim();
+  const missingPeriod = !openEnded && (!start.value || !end.value || start.value > end.value);
+  reason.classList.toggle("is-invalid", missingReason);
+  start.classList.toggle("is-invalid", missingPeriod);
+  end.classList.toggle("is-invalid", missingPeriod);
+  if (missingReason || missingPeriod) {
+    setBanner(staffMessage, "Enter the reason and the block period.", "is-blocked");
+    return;
+  }
+  const button = form.querySelector("button[type='submit']");
+  if (button) button.disabled = true;
+  blockMachine(staffDetails.dataset.id, blockFields()).catch((error) => {
+    if (button) button.disabled = false;
+    showStaffError(error);
+  });
+});
+
+function renderBlockPreview(data) {
+  const form = document.querySelector("#blockForm");
+  const previous = document.querySelector("#blockPreview");
+  if (previous) previous.remove();
+  const session = data.activeSession ? `
+    <fieldset class="block-choice">
+      <legend>Current session</legend>
+      <p>${escapeHtml(data.activeSession.name)} · ${escapeHtml(data.activeSession.date)} ${escapeHtml(data.activeSession.start)}–${escapeHtml(data.activeSession.end)}</p>
+      <label class="block-check"><input type="radio" name="blockWhen" value="now" checked> Block now</label>
+      <label class="block-check"><input type="radio" name="blockWhen" value="after"> Block after this session ends</label>
+    </fieldset>
+  ` : "";
+  const rows = data.reservations.map((item) => `
+    <label class="block-check">
+      <input type="checkbox" data-cancel-id="${escapeHtml(item.id)}">
+      <span>${escapeHtml(item.name)} · ${escapeHtml(item.date)} ${escapeHtml(item.start)}–${escapeHtml(item.end)} · ${escapeHtml(item.status)}</span>
+    </label>
+  `).join("");
+  form.insertAdjacentHTML("beforeend", `
+    <div id="blockPreview">
+      ${session}
+      <fieldset class="block-choice">
+        <legend>Reservations in this period</legend>
+        ${rows || "<p>No reservations in this period.</p>"}
+      </fieldset>
+      <button id="confirmBlock" class="primary" type="button">Block machine</button>
+    </div>
+  `);
+  const submit = form.querySelector("button[type='submit']");
+  if (submit) submit.hidden = true;
+}
+
+function blockFields() {
+  const openEnded = document.querySelector("#blockOpenEnded").checked;
+  return {
+    reason: document.querySelector("#blockReason").value.trim(),
+    untilFurtherNotice: openEnded,
+    blockStart: openEnded ? "" : document.querySelector("#blockStart").value,
+    blockEnd: openEnded ? "" : document.querySelector("#blockEnd").value
+  };
+}
+
+async function blockMachine(id, input) {
+  const data = await readJson(await fetch(`/api/staff/equipment/${encodeURIComponent(id)}/block`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...sessionHeader() },
+    body: JSON.stringify(input)
+  }));
+  if (data.preview) {
+    renderBlockPreview(data);
+    const button = document.querySelector("#blockForm button[type='submit']");
+    if (button) button.disabled = false;
+    setBanner(staffMessage, data.message, "is-warning");
+    return;
+  }
+  await loadStaff();
+  setBanner(staffMessage, data.message, data.mailSent === false ? "is-warning" : "is-open");
+}
+
 accountView.addEventListener("click", (event) => {
   const day = event.target.closest("#historyDayStrip [data-date]");
   if (day) {
@@ -819,6 +1378,7 @@ accountView.addEventListener("click", (event) => {
 document.querySelector("#historyDate").addEventListener("change", () => loadHistory().catch(showHistoryError));
 document.querySelector("#historyEquipment").addEventListener("change", () => loadHistory().catch(showHistoryError));
 document.querySelector("#historyStatus").addEventListener("change", () => loadHistory().catch(showHistoryError));
+document.querySelector("#historyUser").addEventListener("change", () => loadHistory().catch(showHistoryError));
 
 historyList.addEventListener("click", (event) => {
   const confirmButton = event.target.closest("[data-confirm]");
@@ -844,6 +1404,16 @@ historyList.addEventListener("click", (event) => {
 });
 
 historyDetails.addEventListener("click", (event) => {
+  const reservations = event.target.closest("[data-profile-reservations]");
+  if (reservations) {
+    openProfileReservations(reservations.dataset.profileReservations);
+    return;
+  }
+  const write = event.target.closest("[data-write-email]");
+  if (write) {
+    write.closest(".profile-card").querySelector(".profile-mail").hidden = false;
+    return;
+  }
   const confirmButton = event.target.closest("#confirmReservation");
   if (confirmButton) {
     confirmReservation(historyDetails.dataset.id, confirmButton).catch((error) => {
@@ -867,6 +1437,12 @@ historyDetails.addEventListener("click", (event) => {
 });
 
 historyDetails.addEventListener("submit", (event) => {
+  const mail = event.target.closest(".profile-mail");
+  if (mail) {
+    event.preventDefault();
+    sendProfileEmail(mail, historyMessage, showHistoryError);
+    return;
+  }
   const form = event.target.closest("#reportForm");
   if (!form) return;
   event.preventDefault();
@@ -903,6 +1479,18 @@ window.addEventListener("hashchange", () => {
   if (!token) return;
   if (location.hash === "#/account") {
     showAccount();
+    return;
+  }
+  if (location.hash === "#/staff") {
+    showStaff();
+    return;
+  }
+  if (location.hash === "#/tickets") {
+    showTickets();
+    return;
+  }
+  if (location.hash === "#/reservations") {
+    showAllReservations();
     return;
   }
   if (location.hash === "#/choose") {
@@ -956,7 +1544,7 @@ async function restore() {
   try {
     const account = await readJson(await fetch("/api/me", { headers: sessionHeader() }));
     showSignedIn(account);
-    if (location.hash !== "#/account") await loadCatalogue();
+    if (location.hash !== "#/account" && location.hash !== "#/staff") await loadCatalogue();
   } catch (error) {
     if (error.code === "NoSession") {
       showSignedOut();

@@ -41,6 +41,12 @@ async function accountId(request) {
   return (await signedInUser(request)).id;
 }
 
+async function requireStaff(request) {
+  const user = await signedInUser(request);
+  if (user.role !== "staff") throw new ContractError("Forbidden");
+  return user;
+}
+
 function hashPassword(password) {
   const salt = randomBytes(16).toString("hex");
   const hash = scryptSync(password, salt, 32).toString("hex");
@@ -125,4 +131,4 @@ function signOut(request) {
   return { signedOut: true };
 }
 
-module.exports = { currentSession, currentAccount, accountId, signIn, registerAccount, signOut }
+module.exports = { currentSession, currentAccount, accountId, requireStaff, signIn, registerAccount, signOut }

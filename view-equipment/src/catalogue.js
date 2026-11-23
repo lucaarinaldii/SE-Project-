@@ -18,7 +18,8 @@ function summary(record) {
   return {
     id: record.id,
     type: record.Type,
-    location: record.Location
+    location: record.Location,
+    serial: record.serial || ""
   };
 }
 
@@ -41,6 +42,7 @@ async function equipmentDetails(id) {
     id: record.id,
     type: record.Type,
     location: record.Location,
+    serial: record.serial || "",
     description: record.description ?? "",
     rules: rulesOfUse(record.Max_Booking_Duration)
   };
