@@ -35,7 +35,8 @@ function present(row) {
     end: row.end,
     issueType: row.issueType,
     description: row.description,
-    status: row.status
+    status: row.status,
+    materialId: row.materialId || ""
   };
 }
 

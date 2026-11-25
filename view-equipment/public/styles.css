@@ -958,3 +958,5 @@ button.slot:disabled { cursor: wait; opacity: 0.7; }
     animation: none !important;
   }
 }
+
+.staff-links { margin-top: var(--space-lg); }

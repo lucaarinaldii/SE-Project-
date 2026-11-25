@@ -1,7 +1,7 @@
 const fs = require("fs/promises");
 const path = require("path");
 const { ContractError } = require("./errors");
-const { buildList, buildDetails, buildAvailability, buildHistory, buildAllReservations, buildReservation, createReservation, confirmOwnedReservation, cancelOwnedReservation, reportOwnedReservation, buildStaffEquipment, blockStaffEquipment, unblockStaffEquipment, buildTickets, updateTicket, messageStaffUser } = require("./page");
+const { buildList, buildDetails, buildAvailability, buildHistory, buildAllReservations, buildReservation, createReservation, confirmOwnedReservation, cancelOwnedReservation, reportOwnedReservation, buildStaffEquipment, blockStaffEquipment, unblockStaffEquipment, buildTickets, updateTicket, messageStaffUser, buildAccounts, suspendStaffAccount, reactivateStaffAccount, buildMaterials, updateMaterialLevel } = require("./page");
 const { currentAccount, signIn, registerAccount, signOut } = require("./login");
 
 const PUBLIC_DIR = path.join(__dirname, "..", "public");
@@ -15,6 +15,10 @@ const HTTP_STATUS = {
   NoSession: 401,
   InvalidCredentials: 401,
   LoginBlocked: 423,
+  AccountSuspended: 423,
+  CannotSuspend: 409,
+  SuspensionIncomplete: 422,
+  InvalidQuantity: 422,
   EmailTaken: 409,
   InvalidRegistration: 422,
   UnknownType: 422,
@@ -202,6 +206,31 @@ async function handle(req, res) {
     if (req.method === "POST" && unblockMatch) {
       const body = await readBody(req);
       sendJson(res, 200, await unblockStaffEquipment(req, decodeURIComponent(unblockMatch[1])));
+      return;
+    }
+    if (req.method === "GET" && url.pathname === "/api/staff/accounts") {
+      sendJson(res, 200, await buildAccounts(req));
+      return;
+    }
+    const suspendMatch = url.pathname.match(/^\/api\/staff\/accounts\/([^/]+)\/suspend$/);
+    if (req.method === "POST" && suspendMatch) {
+      const body = await readBody(req);
+      sendJson(res, 200, await suspendStaffAccount(req, decodeURIComponent(suspendMatch[1]), body));
+      return;
+    }
+    const reactivateMatch = url.pathname.match(/^\/api\/staff\/accounts\/([^/]+)\/reactivate$/);
+    if (req.method === "POST" && reactivateMatch) {
+      sendJson(res, 200, await reactivateStaffAccount(req, decodeURIComponent(reactivateMatch[1])));
+      return;
+    }
+    if (req.method === "GET" && url.pathname === "/api/materials") {
+      sendJson(res, 200, await buildMaterials(req));
+      return;
+    }
+    const levelMatch = url.pathname.match(/^\/api\/staff\/materials\/([^/]+)\/level$/);
+    if (req.method === "POST" && levelMatch) {
+      const body = await readBody(req);
+      sendJson(res, 200, await updateMaterialLevel(req, decodeURIComponent(levelMatch[1]), body));
       return;
     }
     if (req.method === "GET" && url.pathname === "/api/catalogue") {

@@ -15,6 +15,19 @@ const ticketsView = document.querySelector("#ticketsView");
 const ticketsMessage = document.querySelector("#ticketsMessage");
 const ticketsList = document.querySelector("#ticketsList");
 const ticketsDetails = document.querySelector("#ticketsDetails");
+const materialsView = document.querySelector("#materialsView");
+const materialsMessage = document.querySelector("#materialsMessage");
+const materialsList = document.querySelector("#materialsList");
+const materialsDetails = document.querySelector("#materialsDetails");
+const manageView = document.querySelector("#manageView");
+const manageMessage = document.querySelector("#manageMessage");
+const manageList = document.querySelector("#manageList");
+const manageDetails = document.querySelector("#manageDetails");
+let selectedMaterialId = "";
+let selectedAccountId = "";
+let materialsCanManage = false;
+let pendingBlockReason = "";
+let pendingTicketEquipment = "";
 let ticketGroup = "open";
 let selectedTicketId = "";
 let accountRole = "";
@@ -80,6 +93,7 @@ function fillAccount(account) {
   document.querySelector("#openStaff").hidden = account.role !== "staff";
   document.querySelector("#openTickets").hidden = account.role !== "staff";
   document.querySelector("#openAllReservations").hidden = account.role !== "staff";
+  document.querySelector("#openManage").hidden = account.role !== "staff";
 }
 
 function showChoose() {
@@ -87,6 +101,8 @@ function showChoose() {
   accountView.hidden = true;
   staffView.hidden = true;
   ticketsView.hidden = true;
+  materialsView.hidden = true;
+  manageView.hidden = true;
   document.querySelector("#backToChoices").hidden = true;
   pageTitle.textContent = "Choose what to book";
   pageLede.textContent = "Pick a machine. Open it to see the day and take a free slot.";
@@ -100,6 +116,8 @@ function showAccount() {
   accountView.hidden = false;
   staffView.hidden = true;
   ticketsView.hidden = true;
+  materialsView.hidden = true;
+  manageView.hidden = true;
   document.querySelector("#backToChoices").hidden = false;
   historyScope = "mine";
   document.querySelector("#historyUserBlock").hidden = true;
@@ -121,6 +139,8 @@ function showAllReservations() {
   accountView.hidden = false;
   staffView.hidden = true;
   ticketsView.hidden = true;
+  materialsView.hidden = true;
+  manageView.hidden = true;
   historyScope = "all";
   document.querySelector("#historyUserBlock").hidden = false;
   document.querySelector("#historyHeading").textContent = "All reservations";
@@ -142,6 +162,8 @@ function showStaff() {
   accountView.hidden = true;
   staffView.hidden = false;
   ticketsView.hidden = true;
+  materialsView.hidden = true;
+  manageView.hidden = true;
   document.querySelector("#backToChoices").hidden = false;
   pageTitle.textContent = "Staff";
   pageLede.textContent = "Block a machine, or open it again.";
@@ -161,6 +183,8 @@ function showTickets() {
   accountView.hidden = true;
   staffView.hidden = true;
   ticketsView.hidden = false;
+  materialsView.hidden = true;
+  manageView.hidden = true;
   document.querySelector("#backToChoices").hidden = false;
   pageTitle.textContent = "View tickets";
   pageLede.textContent = "Open reports stay here. Completed ones stay under Completed.";
@@ -178,6 +202,8 @@ function showSignedIn(account) {
   else if (location.hash === "#/staff") showStaff();
   else if (location.hash === "#/tickets") showTickets();
   else if (location.hash === "#/reservations") showAllReservations();
+  else if (location.hash === "#/materials") showMaterials();
+  else if (location.hash === "#/accounts") showManage();
   else showChoose();
 }
 
@@ -185,6 +211,7 @@ function showAuthError(error) {
   const text = {
     InvalidCredentials: "Email or password is wrong.",
     LoginBlocked: "Sign-in is blocked for 15 minutes after 3 failed attempts.",
+    AccountSuspended: "This account is suspended. Contact the makerspace staff.",
     EmailTaken: "An account with this email already exists.",
     InvalidRegistration: "Enter a name, a valid email, and a password of at least 8 characters.",
     StorageUnavailable: "Service unavailable."
@@ -956,24 +983,29 @@ function renderTicketDetails(item) {
     <p class="card-location">${escapeHtml(item.serial || "")}</p>
     <p class="card-location">${escapeHtml(item.location)}</p>
     <p><span class="badge ${ticketStatusClass(item.status)}">${escapeHtml(item.status)}</span></p>
-    ${profilePanel(item.profile)}
+    ${isMaterialTicket(item) ? `<section class="profile-card"><p class="eyebrow">Opened automatically</p><p>The material level reached its minimum.</p></section>` : profilePanel(item.profile)}
     <p class="card-status">${escapeHtml(ticketWhen(item))}</p>
     <p class="card-title">${escapeHtml(item.issueType)}</p>
     <p>${escapeHtml(item.description)}</p>
     ${finished ? "<p>This report stays in Completed.</p>" : ""}
     <div class="block-actions">${actions}</div>
+    <div class="block-actions staff-links">
+      <button class="ghost" type="button" data-block-machine="${escapeHtml(item.equipmentId)}" data-block-reason="${escapeHtml(item.issueType)}">Block machine</button>
+      ${isMaterialTicket(item) ? `<button class="ghost" type="button" data-open-materials="${escapeHtml(item.equipmentId)}">View material</button>` : ""}
+    </div>
   `;
 }
 
 async function loadTickets() {
   const params = new URLSearchParams({ group: ticketGroup });
-  const equipment = document.querySelector("#ticketEquipment").value;
+  const equipment = pendingTicketEquipment || document.querySelector("#ticketEquipment").value;
+  pendingTicketEquipment = "";
   const date = document.querySelector("#ticketDate").value;
   if (equipment) params.set("equipment", equipment);
   if (date) params.set("date", date);
   const data = await readJson(await fetch(`/api/tickets?${params}`, { headers: sessionHeader() }));
   const select = document.querySelector("#ticketEquipment");
-  const chosen = select.value;
+  const chosen = equipment;
   select.innerHTML = [`<option value="">All equipment</option>`].concat(data.equipment.map((item) => (
     `<option value="${escapeHtml(item.id)}">${escapeHtml(item.type)} · ${escapeHtml(item.serial)}</option>`
   ))).join("");
@@ -990,7 +1022,7 @@ async function loadTickets() {
         <span class="card-title">${escapeHtml(item.equipment || "Equipment")}${item.serial ? ` · ${escapeHtml(item.serial)}` : ""}</span>
         <span class="badge ${ticketStatusClass(item.status)}">${escapeHtml(item.status)}</span>
       </span>
-      <span class="card-location">${escapeHtml(item.user)}</span>
+      <span class="card-location">${escapeHtml(isMaterialTicket(item) ? "Automatic alert" : item.user)}</span>
       <span class="card-status">${escapeHtml(ticketWhen(item))}</span>
     </button>
   `).join("");
@@ -1180,6 +1212,8 @@ async function loadStaff() {
 
 function renderStaffDetails(item) {
   staffDetails.dataset.id = item.id;
+  const reasonValue = item.reason || pendingBlockReason;
+  pendingBlockReason = "";
   const openEnded = item.status === "blocked" && !item.blockStart && !item.blockEnd;
   staffDetails.innerHTML = `
     <p class="eyebrow">Machine</p>
@@ -1190,7 +1224,7 @@ function renderStaffDetails(item) {
     ${item.status === "blocked" ? `<p class="card-status">${escapeHtml(statusLabel(item))}</p><p>This machine is already blocked. You can change the reason or the period.</p>` : ""}
     <form id="blockForm" class="block-form">
       <label for="blockReason">Reason</label>
-      <input id="blockReason" value="${escapeHtml(item.reason || "")}">
+      <input id="blockReason" value="${escapeHtml(reasonValue)}">
       <label class="block-check" for="blockOpenEnded">
         <input id="blockOpenEnded" type="checkbox"${openEnded ? " checked" : ""}>
         Until further notice
@@ -1204,6 +1238,10 @@ function renderStaffDetails(item) {
         ${item.status === "blocked" ? `<button id="unblockMachine" class="ghost" type="button">Unblock</button>` : ""}
       </div>
     </form>
+    <div class="block-actions staff-links">
+      <button class="ghost" type="button" data-staff-tickets="${escapeHtml(item.id)}">Tickets for this machine</button>
+      <button class="ghost" type="button" data-staff-materials="${escapeHtml(item.id)}">Materials</button>
+    </div>
   `;
 }
 
@@ -1493,6 +1531,14 @@ window.addEventListener("hashchange", () => {
     showAllReservations();
     return;
   }
+  if (location.hash === "#/materials") {
+    showMaterials();
+    return;
+  }
+  if (location.hash === "#/accounts") {
+    showManage();
+    return;
+  }
   if (location.hash === "#/choose") {
     const opening = chooseView.hidden;
     showChoose();
@@ -1534,6 +1580,369 @@ details.addEventListener("click", (event) => {
 details.addEventListener("change", (event) => {
   if (event.target.id !== "availabilityDate") return;
   loadAvailability(details.dataset.id).catch(showAvailabilityError);
+});
+
+// ---- Quick links between Tickets, Materials and Staff (Block machine) ----
+
+function isMaterialTicket(item) {
+  return item.issueType === "Low material";
+}
+
+function goTo(hash, show) {
+  if (location.hash !== hash) location.hash = hash;
+  else show();
+}
+
+function openBlockMachine(id, reason) {
+  staffDetails.dataset.id = id;
+  pendingBlockReason = reason || "";
+  goTo("#/staff", showStaff);
+}
+
+function openMachineTickets(id, ticketId) {
+  pendingTicketEquipment = id;
+  selectedTicketId = ticketId || "";
+  ticketGroup = "open";
+  goTo("#/tickets", showTickets);
+}
+
+function openMachineMaterials(id) {
+  selectedMaterialId = id || "";
+  goTo("#/materials", showMaterials);
+}
+
+ticketsDetails.addEventListener("click", (event) => {
+  const block = event.target.closest("[data-block-machine]");
+  if (block) {
+    openBlockMachine(block.dataset.blockMachine, block.dataset.blockReason);
+    return;
+  }
+  const material = event.target.closest("[data-open-materials]");
+  if (material) openMachineMaterials(material.dataset.openMaterials);
+});
+
+staffDetails.addEventListener("click", (event) => {
+  const tickets = event.target.closest("[data-staff-tickets]");
+  if (tickets) {
+    openMachineTickets(tickets.dataset.staffTickets);
+    return;
+  }
+  const materials = event.target.closest("[data-staff-materials]");
+  if (materials) openMachineMaterials(materials.dataset.staffMaterials);
+});
+
+// ---- Materials: everyone sees the level, only staff can update it ----
+
+function materialStateClass(state) {
+  if (state === "ok") return "open";
+  if (state === "low") return "is-awaiting";
+  return "blocked";
+}
+
+function materialStateLabel(state) {
+  if (state === "ok") return "In stock";
+  if (state === "low") return "Low";
+  return "Empty";
+}
+
+function materialAmount(item) {
+  return `Level ${item.quantity} · minimum ${item.minimum}`;
+}
+
+function showMaterialsError(error) {
+  const text = {
+    NoSession: "Sign in to see the materials.",
+    Forbidden: "Only staff can change a level.",
+    EquipmentNotFound: "Machine not found.",
+    InvalidQuantity: "Enter a whole number from 0 to 9999.",
+    StorageUnavailable: "Service unavailable."
+  }[error.code];
+  setBanner(materialsMessage, text || "Something went wrong.", "is-blocked");
+}
+
+function showMaterials() {
+  chooseView.hidden = true;
+  accountView.hidden = true;
+  staffView.hidden = true;
+  ticketsView.hidden = true;
+  manageView.hidden = true;
+  materialsView.hidden = false;
+  document.querySelector("#backToChoices").hidden = false;
+  pageTitle.textContent = "Materials";
+  pageLede.textContent = materialsCanManage
+    ? "Material level for each machine. Update a level, or block a machine that has run out."
+    : "How much material is left for each machine.";
+  document.title = "Materials";
+  if (location.hash !== "#/materials") location.hash = "#/materials";
+  window.scrollTo(0, 0);
+  setBanner(materialsMessage, "");
+  loadMaterials().catch(showMaterialsError);
+}
+
+function renderMaterialDetails(item) {
+  const staffPart = materialsCanManage ? `
+    <form id="materialForm" class="block-form">
+      <label for="materialQuantity">New level</label>
+      <input id="materialQuantity" type="number" min="0" max="9999" step="1" value="${item.quantity}">
+      <div class="block-actions">
+        <button class="primary" type="submit">Update level</button>
+      </div>
+    </form>
+    <div class="block-actions staff-links">
+      ${item.ticketId ? `<button class="ghost" type="button" data-material-ticket="${escapeHtml(item.equipmentId)}" data-ticket-id="${escapeHtml(item.ticketId)}">View ticket</button>` : ""}
+      <button class="ghost" type="button" data-material-block="${escapeHtml(item.equipmentId)}" data-block-reason="${item.state === "ok" ? "" : "Low material"}">Block machine</button>
+    </div>
+  ` : "";
+  materialsDetails.dataset.id = item.id;
+  materialsDetails.innerHTML = `
+    <p class="eyebrow">Material</p>
+    <h2>${escapeHtml(item.equipment)}</h2>
+    <p class="card-location">${item.serial ? `${escapeHtml(item.serial)} · ` : ""}${escapeHtml(item.location)}</p>
+    <p><span class="badge ${materialStateClass(item.state)}">${materialStateLabel(item.state)}</span></p>
+    <p class="card-status">${escapeHtml(materialAmount(item))}</p>
+    ${staffPart}
+  `;
+}
+
+async function loadMaterials() {
+  const data = await readJson(await fetch("/api/materials", { headers: sessionHeader() }));
+  materialsCanManage = data.canManage === true;
+  materialsList.innerHTML = data.materials.map((item) => `
+    <button class="card${item.id === selectedMaterialId ? " is-selected" : ""}" type="button" data-material="${escapeHtml(item.id)}" ${item.id === selectedMaterialId ? "aria-current=\"true\"" : ""}>
+      <span class="card-top">
+        <span class="card-title">${escapeHtml(item.equipment)}</span>
+        <span class="badge ${materialStateClass(item.state)}">${materialStateLabel(item.state)}</span>
+      </span>
+      <span class="card-location">${item.serial ? `${escapeHtml(item.serial)} · ` : ""}${escapeHtml(item.location)}</span>
+      <span class="card-status">${escapeHtml(materialAmount(item))}</span>
+    </button>
+  `).join("");
+  setBanner(materialsMessage, data.message, "is-warning");
+  const selected = data.materials.find((item) => item.id === selectedMaterialId);
+  if (selected) renderMaterialDetails(selected);
+  else {
+    selectedMaterialId = "";
+    delete materialsDetails.dataset.id;
+    materialsDetails.innerHTML = `
+      <div class="empty">
+        <p class="eyebrow">Material</p>
+        <h2>Pick one</h2>
+        <p>Open a machine to see how much material is left.</p>
+      </div>
+    `;
+  }
+  return data;
+}
+
+async function updateMaterialLevel(id, quantity) {
+  const data = await readJson(await fetch(`/api/staff/materials/${encodeURIComponent(id)}/level`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...sessionHeader() },
+    body: JSON.stringify({ quantity })
+  }));
+  await loadMaterials();
+  setBanner(materialsMessage, data.message, data.state === "ok" ? "is-open" : "is-warning");
+}
+
+materialsList.addEventListener("click", (event) => {
+  const card = event.target.closest("[data-material]");
+  if (!card) return;
+  selectedMaterialId = card.dataset.material;
+  setBanner(materialsMessage, "");
+  loadMaterials().catch(showMaterialsError);
+});
+
+materialsDetails.addEventListener("submit", (event) => {
+  const form = event.target.closest("#materialForm");
+  if (!form) return;
+  event.preventDefault();
+  const input = document.querySelector("#materialQuantity");
+  const value = input.value.trim() === "" ? NaN : Number(input.value);
+  const invalid = !Number.isInteger(value) || value < 0 || value > 9999;
+  input.classList.toggle("is-invalid", invalid);
+  if (invalid) {
+    setBanner(materialsMessage, "Enter a whole number from 0 to 9999.", "is-blocked");
+    return;
+  }
+  const button = form.querySelector("button[type='submit']");
+  if (button) button.disabled = true;
+  updateMaterialLevel(materialsDetails.dataset.id, value).catch((error) => {
+    if (button) button.disabled = false;
+    showMaterialsError(error);
+  });
+});
+
+materialsDetails.addEventListener("click", (event) => {
+  const block = event.target.closest("[data-material-block]");
+  if (block) {
+    openBlockMachine(block.dataset.materialBlock, block.dataset.blockReason);
+    return;
+  }
+  const ticket = event.target.closest("[data-material-ticket]");
+  if (ticket) openMachineTickets(ticket.dataset.materialTicket, ticket.dataset.ticketId);
+});
+
+document.querySelector("#openMaterials").addEventListener("click", () => {
+  if (location.hash !== "#/materials") location.hash = "#/materials";
+});
+
+// ---- Manage accounts: staff can suspend an account until a date, or reactivate it ----
+
+function showManageError(error) {
+  const text = {
+    NoSession: "Sign in to manage accounts.",
+    Forbidden: "Only staff can manage accounts.",
+    UserNotFound: "This account does not exist.",
+    CannotSuspend: "You cannot suspend your own account.",
+    SuspensionIncomplete: "Choose an end date from today onwards.",
+    StorageUnavailable: "Service unavailable."
+  }[error.code];
+  setBanner(manageMessage, text || "Something went wrong.", "is-blocked");
+}
+
+function showManage() {
+  if (accountRole !== "staff") {
+    showAccount();
+    return;
+  }
+  chooseView.hidden = true;
+  accountView.hidden = true;
+  staffView.hidden = true;
+  ticketsView.hidden = true;
+  materialsView.hidden = true;
+  manageView.hidden = false;
+  document.querySelector("#backToChoices").hidden = false;
+  pageTitle.textContent = "Manage accounts";
+  pageLede.textContent = "Suspend an account until a date, or reactivate it. A suspended account cannot sign in.";
+  document.title = "Manage accounts";
+  if (location.hash !== "#/accounts") location.hash = "#/accounts";
+  window.scrollTo(0, 0);
+  setBanner(manageMessage, "");
+  loadManage().catch(showManageError);
+}
+
+function accountBadge(item) {
+  return item.status === "suspended"
+    ? `<span class="badge blocked">Suspended</span>`
+    : `<span class="badge open">Active</span>`;
+}
+
+function renderManageDetails(item) {
+  const own = item.email === document.querySelector("#accountEmail").textContent;
+  const suspended = item.status === "suspended";
+  manageDetails.dataset.id = item.id;
+  manageDetails.innerHTML = `
+    <p class="eyebrow">Account</p>
+    <h2>${escapeHtml(item.name)}</h2>
+    <p class="card-location">${escapeHtml(item.email)} · ${escapeHtml(roleLabel(item.role))}</p>
+    <p>${accountBadge(item)}</p>
+    ${suspended ? `<p class="card-status">Suspended until ${escapeHtml(item.until)}</p>` : ""}
+    ${own ? "<p>This is your own account. You cannot suspend it.</p>" : `
+      <form id="suspendForm" class="block-form">
+        <label for="suspendUntil">Suspended until</label>
+        <input id="suspendUntil" type="date" value="${escapeHtml(item.until || "")}">
+        <div class="block-actions">
+          <button class="primary" type="submit">${suspended ? "Update suspension" : "Suspend account"}</button>
+          ${suspended ? `<button id="reactivateAccount" class="ghost" type="button">Reactivate</button>` : ""}
+        </div>
+      </form>
+    `}
+  `;
+}
+
+async function loadManage() {
+  const data = await readJson(await fetch("/api/staff/accounts", { headers: sessionHeader() }));
+  manageList.innerHTML = data.accounts.map((item) => `
+    <button class="card${item.id === selectedAccountId ? " is-selected" : ""}" type="button" data-account="${escapeHtml(item.id)}" ${item.id === selectedAccountId ? "aria-current=\"true\"" : ""}>
+      <span class="card-top">
+        <span class="card-title">${escapeHtml(item.name)}</span>
+        ${accountBadge(item)}
+      </span>
+      <span class="card-location">${escapeHtml(item.email)}</span>
+      <span class="card-status">${item.status === "suspended" ? `Until ${escapeHtml(item.until)}` : escapeHtml(roleLabel(item.role))}</span>
+    </button>
+  `).join("");
+  const selected = data.accounts.find((item) => item.id === selectedAccountId);
+  if (selected) renderManageDetails(selected);
+  return data;
+}
+
+function armSuspend(button) {
+  if (button.dataset.ready === "yes") return true;
+  button.dataset.ready = "yes";
+  button.textContent = "Yes, suspend";
+  setBanner(manageMessage, "Suspend this account? The person will be signed out and will not be able to sign in until that date.", "is-warning");
+  return false;
+}
+
+async function suspendAccountRequest(id, until) {
+  const data = await readJson(await fetch(`/api/staff/accounts/${encodeURIComponent(id)}/suspend`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...sessionHeader() },
+    body: JSON.stringify({ until })
+  }));
+  await loadManage();
+  setBanner(manageMessage, data.message, "is-open");
+}
+
+async function reactivateAccountRequest(id) {
+  const data = await readJson(await fetch(`/api/staff/accounts/${encodeURIComponent(id)}/reactivate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...sessionHeader() },
+    body: "{}"
+  }));
+  await loadManage();
+  setBanner(manageMessage, data.message, "is-open");
+}
+
+manageList.addEventListener("click", (event) => {
+  const card = event.target.closest("[data-account]");
+  if (!card) return;
+  selectedAccountId = card.dataset.account;
+  setBanner(manageMessage, "");
+  loadManage().catch(showManageError);
+});
+
+manageDetails.addEventListener("input", () => {
+  const button = manageDetails.querySelector("#suspendForm button[type='submit']");
+  if (button && button.dataset.ready === "yes") {
+    delete button.dataset.ready;
+    button.textContent = manageDetails.querySelector("#reactivateAccount") ? "Update suspension" : "Suspend account";
+    setBanner(manageMessage, "");
+  }
+});
+
+manageDetails.addEventListener("submit", (event) => {
+  const form = event.target.closest("#suspendForm");
+  if (!form) return;
+  event.preventDefault();
+  const until = document.querySelector("#suspendUntil");
+  until.classList.toggle("is-invalid", !until.value);
+  if (!until.value) {
+    setBanner(manageMessage, "Choose an end date from today onwards.", "is-blocked");
+    return;
+  }
+  const button = form.querySelector("button[type='submit']");
+  if (!armSuspend(button)) return;
+  button.disabled = true;
+  suspendAccountRequest(manageDetails.dataset.id, until.value).catch((error) => {
+    button.disabled = false;
+    showManageError(error);
+  });
+});
+
+manageDetails.addEventListener("click", (event) => {
+  const button = event.target.closest("#reactivateAccount");
+  if (!button) return;
+  button.disabled = true;
+  reactivateAccountRequest(manageDetails.dataset.id).catch((error) => {
+    button.disabled = false;
+    showManageError(error);
+  });
+});
+
+document.querySelector("#openManage").addEventListener("click", () => {
+  if (location.hash !== "#/accounts") location.hash = "#/accounts";
 });
 
 async function restore() {

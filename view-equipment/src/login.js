@@ -62,6 +62,15 @@ function verifyPassword(password, stored) {
   return timingSafeEqual(actual, expected);
 }
 
+function todayText() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
+function isSuspended(user) {
+  return Boolean(user.suspendedUntil) && user.suspendedUntil >= todayText();
+}
+
 function normalizeEmail(value) {
   return String(value || "").trim().toLowerCase();
 }
@@ -90,6 +99,7 @@ async function signIn(email, password) {
       user.lockedUntil = attempts >= 3 ? new Date(Date.now() + LOCK_MS).toISOString() : "";
       return { code: attempts >= 3 ? "LoginBlocked" : "InvalidCredentials" };
     }
+    if (isSuspended(user)) return { code: "AccountSuspended" };
     user.failedAttempts = 0;
     user.lockedUntil = "";
     const token = randomBytes(24).toString("hex");
@@ -114,7 +124,8 @@ async function registerAccount(input) {
       passwordHash: hashPassword(password),
       role: "user",
       failedAttempts: 0,
-      lockedUntil: ""
+      lockedUntil: "",
+      suspendedUntil: ""
     };
     users.push(user);
     const token = randomBytes(24).toString("hex");
@@ -125,10 +136,16 @@ async function registerAccount(input) {
   return { token: outcome.token, account: outcome.account };
 }
 
+function endSessionsOf(userId) {
+  for (const [token, id] of SESSIONS) {
+    if (id === userId) SESSIONS.delete(token);
+  }
+}
+
 function signOut(request) {
   const token = headerToken(request);
   if (token) SESSIONS.delete(token);
   return { signedOut: true };
 }
 
-module.exports = { currentSession, currentAccount, accountId, requireStaff, signIn, registerAccount, signOut }
+module.exports = { currentSession, currentAccount, accountId, requireStaff, signIn, registerAccount, signOut, endSessionsOf, isSuspended }

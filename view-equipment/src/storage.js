@@ -21,7 +21,8 @@ const SCHEMA = [
   block_start text NOT NULL DEFAULT '',
   block_end text NOT NULL DEFAULT '',
   position integer NOT NULL,
-  serial_number text NOT NULL DEFAULT ''
+  serial_number text NOT NULL DEFAULT '',
+  material_level integer NOT NULL DEFAULT 10
 )`,
   `CREATE TABLE IF NOT EXISTS users (
   id text PRIMARY KEY,
@@ -30,7 +31,8 @@ const SCHEMA = [
   password_hash text NOT NULL,
   role text NOT NULL,
   failed_attempts integer NOT NULL DEFAULT 0,
-  locked_until text NOT NULL DEFAULT ''
+  locked_until text NOT NULL DEFAULT '',
+  suspended_until text NOT NULL DEFAULT ''
 )`,
   `CREATE TABLE IF NOT EXISTS reservations (
   id text PRIMARY KEY,
@@ -52,9 +54,9 @@ const SCHEMA = [
 )`,
   `CREATE TABLE IF NOT EXISTS reports (
   id text PRIMARY KEY,
-  reservation_id text NOT NULL UNIQUE REFERENCES reservations (id) ON DELETE CASCADE,
+  reservation_id text UNIQUE REFERENCES reservations (id) ON DELETE CASCADE,
   equipment_id text NOT NULL,
-  user_id text NOT NULL,
+  user_id text,
   issue_type text NOT NULL,
   description text NOT NULL,
   status text NOT NULL CHECK (status IN ('Open', 'In progress', 'Maintenance requested', 'Resolved', 'Rejected')),
@@ -108,7 +110,8 @@ function userRecord(row) {
     passwordHash: row.password_hash,
     role: row.role,
     failedAttempts: row.failed_attempts,
-    lockedUntil: row.locked_until ?? ""
+    lockedUntil: row.locked_until ?? "",
+    suspendedUntil: row.suspended_until ?? ""
   };
 }
 
@@ -139,8 +142,8 @@ async function seedEquipment(client, machines) {
     await client.query(
       `INSERT INTO equipment (
         id, type, location, max_booking_duration, min_threshold, description,
-        get_status, is_open, reason, period, block_start, block_end, position, serial_number
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+        get_status, is_open, reason, period, block_start, block_end, position, serial_number, material_level
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
       ON CONFLICT (id) DO UPDATE
       SET serial_number = CASE
         WHEN equipment.serial_number = '' THEN EXCLUDED.serial_number
@@ -160,7 +163,8 @@ async function seedEquipment(client, machines) {
         machine.blockStart ?? "",
         machine.blockEnd ?? "",
         index,
-        machine.serial || ""
+        machine.serial || "",
+        machine.Material_Level ?? 10
       ]
     );
   }
@@ -169,9 +173,9 @@ async function seedEquipment(client, machines) {
 async function seedUsers(client, users) {
   for (const user of users) {
     await client.query(
-      `INSERT INTO users (id, name, email, password_hash, role, failed_attempts, locked_until)
-       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [user.id, user.name, user.email, user.passwordHash, user.role, Number(user.failedAttempts || 0), user.lockedUntil || ""]
+      `INSERT INTO users (id, name, email, password_hash, role, failed_attempts, locked_until, suspended_until)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [user.id, user.name, user.email, user.passwordHash, user.role, Number(user.failedAttempts || 0), user.lockedUntil || "", user.suspendedUntil || ""]
     );
   }
 }
@@ -206,6 +210,14 @@ async function prepareDatabase() {
       for (const statement of SCHEMA) await client.query(statement);
       await client.query("ALTER TABLE reservations ADD COLUMN IF NOT EXISTS reminder_sent_at text NOT NULL DEFAULT ''");
       await client.query("ALTER TABLE equipment ADD COLUMN IF NOT EXISTS serial_number text NOT NULL DEFAULT ''");
+      await client.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS suspended_until text NOT NULL DEFAULT ''");
+      await client.query("ALTER TABLE equipment ADD COLUMN IF NOT EXISTS material_level integer NOT NULL DEFAULT 10");
+      await client.query("ALTER TABLE reports ALTER COLUMN reservation_id DROP NOT NULL");
+      await client.query("ALTER TABLE reports ALTER COLUMN user_id DROP NOT NULL");
+      await client.query(
+        `CREATE UNIQUE INDEX IF NOT EXISTS reports_open_low_material_key ON reports (equipment_id)
+         WHERE issue_type = 'Low material' AND status NOT IN ('Resolved', 'Rejected')`
+      );
       await seedEquipment(client, await readJson("equipment.json"));
       await client.query("CREATE UNIQUE INDEX IF NOT EXISTS equipment_serial_number_key ON equipment (serial_number)");
       const userCount = await client.query("SELECT COUNT(*)::int AS n FROM users");
@@ -492,7 +504,7 @@ async function listTicketRecords() {
      LEFT JOIN equipment e ON e.id = r.equipment_id
      LEFT JOIN users u ON u.id = r.user_id
      LEFT JOIN reservations v ON v.id = r.reservation_id
-     ORDER BY v.reservation_date DESC NULLS LAST, v.start_minute DESC NULLS LAST, r.created_at DESC, r.id`
+     ORDER BY (r.issue_type = 'Low material') DESC, v.reservation_date DESC NULLS LAST, v.start_minute DESC NULLS LAST, r.created_at DESC, r.id`
   );
   return result.rows.map((row) => ({
     id: row.id,
@@ -560,7 +572,7 @@ async function listOwnedReservations(userId) {
 
 async function findUserById(id) {
   const result = await query(
-    `SELECT id, name, email, password_hash, role, failed_attempts, locked_until
+    `SELECT id, name, email, password_hash, role, failed_attempts, locked_until, suspended_until
      FROM users WHERE id = $1`,
     [id]
   );
@@ -573,7 +585,7 @@ function withUsers(work) {
       await client.query("BEGIN");
       await client.query("SELECT pg_advisory_xact_lock($1)", [USER_LOCK]);
       const existing = await client.query(
-        `SELECT id, name, email, password_hash, role, failed_attempts, locked_until
+        `SELECT id, name, email, password_hash, role, failed_attempts, locked_until, suspended_until
          FROM users ORDER BY email`
       );
       const users = existing.rows.map(userRecord);
@@ -581,9 +593,9 @@ function withUsers(work) {
       await client.query("DELETE FROM users");
       for (const user of users) {
         await client.query(
-          `INSERT INTO users (id, name, email, password_hash, role, failed_attempts, locked_until)
-           VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-          [user.id, user.name, user.email, user.passwordHash, user.role, Number(user.failedAttempts || 0), user.lockedUntil || ""]
+          `INSERT INTO users (id, name, email, password_hash, role, failed_attempts, locked_until, suspended_until)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+          [user.id, user.name, user.email, user.passwordHash, user.role, Number(user.failedAttempts || 0), user.lockedUntil || "", user.suspendedUntil || ""]
         );
       }
       await client.query("COMMIT");
@@ -602,6 +614,87 @@ async function deleteUserByEmail(email) {
     const index = users.findIndex((user) => user.email === email);
     if (index >= 0) users.splice(index, 1);
     return { deleted: index >= 0 };
+  });
+}
+
+async function listAccountRecords() {
+  const result = await query(
+    `SELECT id, name, email, role, suspended_until FROM users ORDER BY name, id`
+  );
+  return result.rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    role: row.role,
+    suspendedUntil: row.suspended_until ?? ""
+  }));
+}
+
+async function setUserSuspension(id, until) {
+  return withUsers((users) => {
+    const user = users.find((item) => item.id === id);
+    if (!user) return false;
+    user.suspendedUntil = until;
+    return true;
+  });
+}
+
+async function listMaterialRecords() {
+  const result = await query(
+    `SELECT id, type, location, serial_number, material_level, min_threshold
+     FROM equipment ORDER BY position, id`
+  );
+  return result.rows.map(materialRecord);
+}
+
+function materialRecord(row) {
+  return {
+    id: row.id,
+    equipment: row.type,
+    location: row.location,
+    serial: row.serial_number ?? "",
+    quantity: row.material_level,
+    minimum: row.min_threshold ?? 0
+  };
+}
+
+async function findMaterialRecord(id) {
+  const result = await query(
+    `SELECT id, type, location, serial_number, material_level, min_threshold
+     FROM equipment WHERE id = $1`,
+    [id]
+  );
+  if (result.rowCount === 0) throw new ContractError("EquipmentNotFound");
+  return materialRecord(result.rows[0]);
+}
+
+async function setMaterialQuantity(id, quantity) {
+  const result = await query(`UPDATE equipment SET material_level = $2 WHERE id = $1 RETURNING id`, [id, quantity]);
+  if (result.rowCount !== 1) throw new ContractError("EquipmentNotFound");
+}
+
+async function listOpenMaterialTickets() {
+  const result = await query(
+    `SELECT id, equipment_id FROM reports
+     WHERE issue_type = 'Low material' AND status NOT IN ('Resolved', 'Rejected')`
+  );
+  return new Map(result.rows.map((row) => [row.equipment_id, row.id]));
+}
+
+async function insertMaterialTicket(ticket) {
+  return withClient(async (client) => {
+    try {
+      await client.query(
+        `INSERT INTO reports (id, reservation_id, equipment_id, user_id, issue_type, description, status, created_at)
+         VALUES ($1, NULL, $2, NULL, 'Low material', $3, 'Open', $4)`,
+        [ticket.id, ticket.equipmentId, ticket.description, ticket.createdAt]
+      );
+      return true;
+    } catch (error) {
+      if (error.code === "23505") return false;
+      console.error(error.message);
+      throw new ContractError("StorageUnavailable");
+    }
   });
 }
 
@@ -634,5 +727,12 @@ module.exports = {
   listOwnedReservations,
   withUsers,
   findUserById,
-  deleteUserByEmail
+  deleteUserByEmail,
+  listAccountRecords,
+  setUserSuspension,
+  listMaterialRecords,
+  findMaterialRecord,
+  setMaterialQuantity,
+  listOpenMaterialTickets,
+  insertMaterialTicket
 };

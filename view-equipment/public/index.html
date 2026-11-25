@@ -109,6 +109,8 @@
             <button id="openStaff" class="ghost" type="button" hidden>Staff</button>
             <button id="openTickets" class="ghost" type="button" hidden>View tickets</button>
             <button id="openAllReservations" class="ghost" type="button" hidden>All reservations</button>
+            <button id="openMaterials" class="ghost" type="button">Materials</button>
+            <button id="openManage" class="ghost" type="button" hidden>Manage accounts</button>
             <button id="signOut" class="ghost" type="button">Sign out</button>
           </div>
         </div>
@@ -227,6 +229,44 @@
               <p class="eyebrow">Ticket</p>
               <h2>Pick one</h2>
               <p>Open a ticket to see the equipment, the user, and the report.</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="materialsView" hidden>
+        <p id="materialsMessage" class="banner is-warning" role="status" hidden></p>
+        <div class="workspace">
+          <section class="catalogue" aria-label="Materials">
+            <div class="section-head">
+              <h2>Materials</h2>
+            </div>
+            <div id="materialsList" class="list"></div>
+          </section>
+          <article id="materialsDetails" class="details">
+            <div class="empty">
+              <p class="eyebrow">Material</p>
+              <h2>Pick one</h2>
+              <p>Open a material to see how much is left.</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="manageView" hidden>
+        <p id="manageMessage" class="banner is-open" role="status" hidden></p>
+        <div class="workspace">
+          <section class="catalogue" aria-label="Accounts">
+            <div class="section-head">
+              <h2>Accounts</h2>
+            </div>
+            <div id="manageList" class="list"></div>
+          </section>
+          <article id="manageDetails" class="details">
+            <div class="empty">
+              <p class="eyebrow">Account</p>
+              <h2>Pick one</h2>
+              <p>Choose an account to suspend it or to reactivate it.</p>
             </div>
           </article>
         </div>

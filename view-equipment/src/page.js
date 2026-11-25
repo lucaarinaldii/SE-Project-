@@ -1,4 +1,4 @@
-const { currentSession, accountId, requireStaff } = require("./login");
+const { currentSession, currentAccount, accountId, requireStaff } = require("./login");
 const { listEquipment, equipmentDetails } = require("./catalogue");
 const { statusOf, machineStatus } = require("./status");
 const { dayAvailability } = require("./availability");
@@ -9,6 +9,8 @@ const { submitReport } = require("./report");
 const { listStaffEquipment, blockEquipment, unblockEquipment } = require("./staff");
 const { listTickets, changeTicketStatus } = require("./tickets");
 const { writeToUser } = require("./message");
+const { listAccounts, suspendAccount, reactivateAccount } = require("./accounts");
+const { listMaterials, setMaterialLevel } = require("./materials");
 
 // Builds screen data for the catalogue and for one day's slots. It does not read the HTTP request or write the response.
 async function buildList(request, type) {
@@ -105,6 +107,31 @@ async function messageStaffUser(request, input) {
   return writeToUser(input && input.userId, input);
 }
 
+async function buildAccounts(request) {
+  await requireStaff(request);
+  return listAccounts();
+}
+
+async function suspendStaffAccount(request, id, input) {
+  const actor = await requireStaff(request);
+  return suspendAccount(actor.id, id, input);
+}
+
+async function reactivateStaffAccount(request, id) {
+  await requireStaff(request);
+  return reactivateAccount(id);
+}
+
+async function buildMaterials(request) {
+  const account = await currentAccount(request);
+  return listMaterials(account.role === "staff");
+}
+
+async function updateMaterialLevel(request, id, input) {
+  await requireStaff(request);
+  return setMaterialLevel(id, input);
+}
+
 module.exports = {
   buildList,
   buildDetails,
@@ -121,5 +148,10 @@ module.exports = {
   unblockStaffEquipment,
   buildTickets,
   updateTicket,
-  messageStaffUser
+  messageStaffUser,
+  buildAccounts,
+  suspendStaffAccount,
+  reactivateStaffAccount,
+  buildMaterials,
+  updateMaterialLevel
 };
