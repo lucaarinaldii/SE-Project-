@@ -118,6 +118,28 @@ function showChoose() {
   document.title = "Choose what to book";
   if (location.hash !== "#/choose") location.hash = "#/choose";
   window.scrollTo(0, 0);
+  loadBlockNotices().catch(() => {});
+}
+
+async function loadBlockNotices() {
+  const box = document.querySelector("#blockNotices");
+  if (!box || !token) return;
+  const data = await readJson(await fetch("/api/notices", { headers: sessionHeader() }));
+  const items = data.notices || [];
+  if (items.length === 0) {
+    box.hidden = true;
+    box.innerHTML = "";
+    return;
+  }
+  box.hidden = false;
+  box.innerHTML = items.map((item) => `
+    <article class="block-notice">
+      <strong>Your reservation was cancelled.</strong>
+      <p>${escapeHtml(item.equipment)}${item.serial ? ` · ${escapeHtml(item.serial)}` : ""}</p>
+      <p>${escapeHtml(formatLongDay(parseIsoDate(item.date)))} · ${escapeHtml(item.start)}–${escapeHtml(item.end)}</p>
+      <p>The machine was blocked: ${escapeHtml(item.reason)}${item.period ? ` · ${escapeHtml(item.period)}` : ""}.</p>
+    </article>
+  `).join("");
 }
 
 function showAccount() {
@@ -513,6 +535,10 @@ function showHistoryError(error) {
     setBanner(historyMessage, "This reservation can no longer be confirmed.", "is-blocked");
     return;
   }
+  if (error.code === "SafetyNotAcknowledged") {
+    setBanner(historyMessage, "Confirm that you have read the rules of use and will follow them.", "is-blocked");
+    return;
+  }
   if (error.code === "CannotCancel") {
     setBanner(historyMessage, "This reservation can no longer be cancelled.", "is-blocked");
     return;
@@ -612,7 +638,8 @@ async function loadHistory(options = {}) {
   const showingCancel = Boolean(historyDetails.querySelector("#cancelReservation"));
   const showingReport = Boolean(historyDetails.querySelector("#showReport"));
   const formOpen = historyDetails.querySelector("#reportForm") && !historyDetails.querySelector("#reportForm").hidden;
-  if (!formOpen && open && (open.canConfirm !== showingConfirm || open.canCancel !== showingCancel || open.canReport !== showingReport)) {
+  const safetyOpen = historyDetails.querySelector("#safetyForm") && !historyDetails.querySelector("#safetyForm").hidden;
+  if (!formOpen && !safetyOpen && open && (open.canConfirm !== showingConfirm || open.canCancel !== showingCancel || open.canReport !== showingReport)) {
     await loadReservation(openId);
   }
 }
@@ -671,6 +698,18 @@ async function loadReservation(id) {
       ${readOnly || !item.canCancel ? "" : `<button id="cancelReservation" class="cancel-reservation" type="button">Cancel reservation</button>`}
       ${readOnly || !item.canReport ? "" : `<button id="showReport" class="primary" type="button">Report</button>`}
     </div>
+    ${readOnly || !item.canConfirm || !item.needsConfirmation ? "" : `
+      <form id="safetyForm" class="report-form" hidden>
+        <p class="card-title">Safety confirmation</p>
+        <p>This machine can cause injury. Read the rules of use, then confirm that you will follow them.</p>
+        <p>${escapeHtml(item.rules || "Follow the posted rules for this machine.")}</p>
+        <label class="safety-check">
+          <input id="safetyAck" type="checkbox">
+          <span>I have read the rules of use and I will use this machine strictly according to the regulations so I do not get injured.</span>
+        </label>
+        <button class="primary" type="submit" disabled>Confirm reservation</button>
+      </form>
+    `}
     ${!readOnly && item.canReport ? `
       <form id="reportForm" class="report-form" hidden>
         <label for="issueType">Issue type</label>
@@ -716,11 +755,23 @@ async function cancelReservation(id, button) {
   setBanner(historyMessage, data.message, data.mailSent ? "is-open" : "is-warning");
 }
 
-async function confirmReservation(id, button) {
+async function openSafety(id) {
+  await loadReservation(id);
+  const button = document.querySelector("#confirmReservation");
+  const form = document.querySelector("#safetyForm");
+  if (button) button.hidden = true;
+  if (form) {
+    form.hidden = false;
+    form.scrollIntoView({ block: "nearest" });
+  }
+}
+
+async function confirmReservation(id, button, acknowledged) {
   if (button) button.disabled = true;
   const data = await readJson(await fetch(`/api/reservations/${encodeURIComponent(id)}/confirm`, {
     method: "POST",
-    headers: sessionHeader()
+    headers: { "Content-Type": "application/json", ...sessionHeader() },
+    body: JSON.stringify(acknowledged ? { acknowledged: true } : {})
   }));
   await loadHistory();
   await loadReservation(id);
@@ -799,6 +850,7 @@ async function loadDetails(id) {
       <dt>Location</dt><dd>${escapeHtml(item.location)}</dd>
       <dt>Description</dt><dd>${item.description || "—"}</dd>
       <dt>Rules of use</dt><dd>${item.rules || "—"}</dd>
+      ${item.needsConfirmation ? `<dt>Safety</dt><dd>This machine can cause injury. Confirming a reservation asks you to accept the rules of use.</dd>` : ""}
       <dt>Material</dt><dd data-material-level>${escapeHtml(materialLine(item.material))}</dd>
       <dt>Status</dt><dd>${statusLabel(item)}</dd>
     </dl>
@@ -1514,7 +1566,13 @@ document.querySelector("#historyUser").addEventListener("change", () => loadHist
 historyList.addEventListener("click", (event) => {
   const confirmButton = event.target.closest("[data-confirm]");
   if (confirmButton) {
-    confirmReservation(confirmButton.dataset.confirm, confirmButton).catch((error) => {
+    const id = confirmButton.dataset.confirm;
+    const item = historyRows.find((row) => row.id === id);
+    if (item && item.needsConfirmation) {
+      openSafety(id).catch(showHistoryError);
+      return;
+    }
+    confirmReservation(id, confirmButton).catch((error) => {
       confirmButton.disabled = false;
       showHistoryError(error);
     });
@@ -1547,6 +1605,12 @@ historyDetails.addEventListener("click", (event) => {
   }
   const confirmButton = event.target.closest("#confirmReservation");
   if (confirmButton) {
+    const form = document.querySelector("#safetyForm");
+    if (form) {
+      confirmButton.hidden = true;
+      form.hidden = false;
+      return;
+    }
     confirmReservation(historyDetails.dataset.id, confirmButton).catch((error) => {
       confirmButton.disabled = false;
       showHistoryError(error);
@@ -1567,11 +1631,32 @@ historyDetails.addEventListener("click", (event) => {
   document.querySelector("#reportForm").hidden = false;
 });
 
+historyDetails.addEventListener("change", (event) => {
+  if (event.target.id !== "safetyAck") return;
+  const button = event.target.closest("form").querySelector("button");
+  if (button) button.disabled = !event.target.checked;
+});
+
 historyDetails.addEventListener("submit", (event) => {
   const mail = event.target.closest(".profile-mail");
   if (mail) {
     event.preventDefault();
     sendProfileEmail(mail, historyMessage, showHistoryError);
+    return;
+  }
+  const safety = event.target.closest("#safetyForm");
+  if (safety) {
+    event.preventDefault();
+    const box = safety.querySelector("#safetyAck");
+    if (!box.checked) {
+      setBanner(historyMessage, "Confirm that you have read the rules of use and will follow them.", "is-blocked");
+      return;
+    }
+    const button = safety.querySelector("button");
+    confirmReservation(historyDetails.dataset.id, button, true).catch((error) => {
+      if (button) button.disabled = false;
+      showHistoryError(error);
+    });
     return;
   }
   const form = event.target.closest("#reportForm");

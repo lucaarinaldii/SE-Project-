@@ -22,7 +22,8 @@ const SCHEMA = [
   block_end text NOT NULL DEFAULT '',
   position integer NOT NULL,
   serial_number text NOT NULL DEFAULT '',
-  material_level integer NOT NULL DEFAULT 10
+  material_level integer NOT NULL DEFAULT 10,
+  needs_confirmation boolean NOT NULL DEFAULT false
 )`,
   `CREATE TABLE IF NOT EXISTS users (
   id text PRIMARY KEY,
@@ -45,6 +46,7 @@ const SCHEMA = [
   end_minute integer NOT NULL,
   status text NOT NULL CHECK (status IN ('Awaiting confirmation', 'Confirmed', 'Completed', 'Cancelled')),
   reminder_sent_at text NOT NULL DEFAULT '',
+  cancel_reason text NOT NULL DEFAULT '',
   CHECK (start_minute < end_minute),
   CONSTRAINT reservations_no_overlap EXCLUDE USING gist (
     equipment_id WITH =,
@@ -99,7 +101,8 @@ function catalogueRecord(row) {
     Location: row.location,
     Max_Booking_Duration: row.max_booking_duration,
     description: row.description ?? "",
-    serial: row.serial_number ?? ""
+    serial: row.serial_number ?? "",
+    needsConfirmation: row.needs_confirmation === true
   };
 }
 
@@ -164,13 +167,15 @@ async function seedEquipment(client, machines) {
     await client.query(
       `INSERT INTO equipment (
         id, type, location, max_booking_duration, min_threshold, description,
-        get_status, is_open, reason, period, block_start, block_end, position, serial_number, material_level
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+        get_status, is_open, reason, period, block_start, block_end, position, serial_number, material_level,
+        needs_confirmation
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
       ON CONFLICT (id) DO UPDATE
       SET serial_number = CASE
         WHEN equipment.serial_number = '' THEN EXCLUDED.serial_number
         ELSE equipment.serial_number
-      END`,
+      END,
+      needs_confirmation = EXCLUDED.needs_confirmation`,
       [
         machine.id,
         machine.Type,
@@ -186,7 +191,8 @@ async function seedEquipment(client, machines) {
         machine.blockEnd ?? "",
         index,
         machine.serial || "",
-        machine.Material_Level ?? 10
+        machine.Material_Level ?? 10,
+        machine.needsConfirmation === true
       ]
     );
   }
@@ -354,9 +360,11 @@ async function prepareDatabase() {
       await client.query("SELECT pg_advisory_xact_lock($1)", [USER_LOCK]);
       for (const statement of SCHEMA) await client.query(statement);
       await client.query("ALTER TABLE reservations ADD COLUMN IF NOT EXISTS reminder_sent_at text NOT NULL DEFAULT ''");
+      await client.query("ALTER TABLE reservations ADD COLUMN IF NOT EXISTS cancel_reason text NOT NULL DEFAULT ''");
       await client.query("ALTER TABLE equipment ADD COLUMN IF NOT EXISTS serial_number text NOT NULL DEFAULT ''");
       await client.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS suspended_until text NOT NULL DEFAULT ''");
       await client.query("ALTER TABLE equipment ADD COLUMN IF NOT EXISTS material_level integer NOT NULL DEFAULT 10");
+      await client.query("ALTER TABLE equipment ADD COLUMN IF NOT EXISTS needs_confirmation boolean NOT NULL DEFAULT false");
       await client.query("ALTER TABLE material_uses ADD COLUMN IF NOT EXISTS stock_after integer");
       await client.query("ALTER TABLE reports ALTER COLUMN reservation_id DROP NOT NULL");
       await client.query("ALTER TABLE reports ALTER COLUMN user_id DROP NOT NULL");
@@ -385,7 +393,7 @@ async function prepareDatabase() {
 
 async function listMachineRecords() {
   const result = await query(
-    `SELECT id, type, location, max_booking_duration, description, serial_number
+    `SELECT id, type, location, max_booking_duration, description, serial_number, needs_confirmation
      FROM equipment ORDER BY position, id`
   );
   return result.rows.map(catalogueRecord);
@@ -393,7 +401,7 @@ async function listMachineRecords() {
 
 async function findMachineRecord(id) {
   const result = await query(
-    `SELECT id, type, location, max_booking_duration, description, serial_number
+    `SELECT id, type, location, max_booking_duration, description, serial_number, needs_confirmation
      FROM equipment WHERE id = $1`,
     [id]
   );
@@ -453,11 +461,11 @@ async function blockMachineAndCancel(equipmentId, block, ids) {
       let cancelled = [];
       if (ids.length > 0) {
         const result = await client.query(
-          `UPDATE reservations SET status = 'Cancelled'
+          `UPDATE reservations SET status = 'Cancelled', cancel_reason = $3
            WHERE equipment_id = $1 AND id = ANY($2::text[])
              AND status IN ('Awaiting confirmation', 'Confirmed')
            RETURNING id`,
-          [equipmentId, ids]
+          [equipmentId, ids, block.reason || ""]
         );
         cancelled = result.rows.map((row) => row.id);
         for (const id of cancelled) await releaseMaterialUse(client, id);
@@ -479,6 +487,35 @@ async function blockMachineAndCancel(equipmentId, block, ids) {
       throw new ContractError("StorageUnavailable");
     }
   });
+}
+
+async function listBlockNotices(userId) {
+  const result = await query(
+    `SELECT r.id, r.reservation_date, r.start_text, r.end_text, r.cancel_reason,
+            e.type, e.serial_number, e.location, e.period
+     FROM reservations r
+     JOIN equipment e ON e.id = r.equipment_id
+     WHERE r.student_id = $1
+       AND r.status = 'Cancelled'
+       AND r.cancel_reason <> ''
+       AND e.get_status = true
+       AND e.is_open = false
+       AND (e.block_start = '' OR r.reservation_date >= e.block_start)
+       AND (e.block_end = '' OR r.reservation_date <= e.block_end)
+     ORDER BY r.reservation_date, r.start_minute, r.id`,
+    [userId]
+  );
+  return result.rows.map((row) => ({
+    id: row.id,
+    equipment: row.type,
+    serial: row.serial_number || "",
+    location: row.location,
+    date: row.reservation_date,
+    start: row.start_text,
+    end: row.end_text,
+    reason: row.cancel_reason,
+    period: row.period || ""
+  }));
 }
 
 async function listReservationRecords() {
@@ -917,6 +954,7 @@ module.exports = {
   listPeriodReservations,
   blockMachineAndCancel,
   listReservationRecords,
+  listBlockNotices,
   insertReservation,
   deleteReservation,
   listAwaitingReservations,

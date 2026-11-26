@@ -1,7 +1,7 @@
 const fs = require("fs/promises");
 const path = require("path");
 const { ContractError } = require("./errors");
-const { buildList, buildDetails, buildAvailability, buildHistory, buildAllReservations, buildReservation, createReservation, confirmOwnedReservation, cancelOwnedReservation, reportOwnedReservation, buildStaffEquipment, blockStaffEquipment, unblockStaffEquipment, buildTickets, updateTicket, messageStaffUser, buildAccounts, suspendStaffAccount, reactivateStaffAccount, buildMaterials, updateMaterialLevel } = require("./page");
+const { buildList, buildDetails, buildAvailability, buildHistory, buildBlockNotices, buildAllReservations, buildReservation, createReservation, confirmOwnedReservation, cancelOwnedReservation, reportOwnedReservation, buildStaffEquipment, blockStaffEquipment, unblockStaffEquipment, buildTickets, updateTicket, messageStaffUser, buildAccounts, suspendStaffAccount, reactivateStaffAccount, buildMaterials, updateMaterialLevel } = require("./page");
 const { currentAccount, signIn, registerAccount, signOut } = require("./login");
 
 const PUBLIC_DIR = path.join(__dirname, "..", "public");
@@ -29,6 +29,7 @@ const HTTP_STATUS = {
   SlotTaken: 409,
   MachineBlocked: 409,
   CannotConfirm: 409,
+  SafetyNotAcknowledged: 422,
   CannotCancel: 409,
   CannotReport: 409,
   ReportIncomplete: 422,
@@ -137,7 +138,8 @@ async function handle(req, res) {
     }
     const confirmMatch = url.pathname.match(/^\/api\/reservations\/([^/]+)\/confirm$/);
     if (req.method === "POST" && confirmMatch) {
-      sendJson(res, 200, await confirmOwnedReservation(req, decodeURIComponent(confirmMatch[1])));
+      const body = await readBody(req);
+      sendJson(res, 200, await confirmOwnedReservation(req, decodeURIComponent(confirmMatch[1]), body));
       return;
     }
     const cancelMatch = url.pathname.match(/^\/api\/reservations\/([^/]+)\/cancel$/);
@@ -163,6 +165,10 @@ async function handle(req, res) {
         status: url.searchParams.get("status") ?? "",
         user: url.searchParams.get("user") ?? ""
       }));
+      return;
+    }
+    if (req.method === "GET" && url.pathname === "/api/notices") {
+      sendJson(res, 200, await buildBlockNotices(req));
       return;
     }
     if (req.method === "GET" && url.pathname === "/api/reservations") {

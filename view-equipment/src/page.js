@@ -2,7 +2,7 @@ const { currentSession, accountId, requireStaff } = require("./login");
 const { listEquipment, equipmentDetails } = require("./catalogue");
 const { statusOf, machineStatus } = require("./status");
 const { dayAvailability } = require("./availability");
-const { myReservations, allReservations, reservationDetails } = require("./history");
+const { myReservations, allReservations, reservationDetails, blockNotices } = require("./history");
 const { reserveSlot } = require("./reserve");
 const { confirmReservation, cancelReservation } = require("./confirmation");
 const { submitReport } = require("./report");
@@ -49,6 +49,10 @@ async function buildAvailability(request, id, date) {
   return dayAvailability(id, date, status);
 }
 
+async function buildBlockNotices(request) {
+  return blockNotices(await accountId(request));
+}
+
 async function buildHistory(request, filters) {
   return myReservations(await accountId(request), filters);
 }
@@ -66,8 +70,8 @@ async function createReservation(request, input) {
   return reserveSlot(await accountId(request), input);
 }
 
-async function confirmOwnedReservation(request, id) {
-  return confirmReservation(await accountId(request), id);
+async function confirmOwnedReservation(request, id, input) {
+  return confirmReservation(await accountId(request), id, undefined, input);
 }
 
 async function cancelOwnedReservation(request, id) {
@@ -138,6 +142,7 @@ module.exports = {
   buildDetails,
   buildAvailability,
   buildHistory,
+  buildBlockNotices,
   buildAllReservations,
   buildReservation,
   createReservation,

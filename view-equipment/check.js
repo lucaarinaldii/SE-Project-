@@ -39,6 +39,8 @@ function request(path, token, options = {}) {
         req.emit("data", raw);
         req.emit("end");
       });
+    } else {
+      process.nextTick(() => req.emit("end"));
     }
   });
 }
@@ -54,6 +56,7 @@ function request(path, token, options = {}) {
   const disposable = [];
   let bookedId = "";
   let soonId = "";
+  let safetyId = "";
   let cancelId = "";
   let pastCancelId = "";
   let reportReservationId = "";
@@ -84,7 +87,7 @@ function request(path, token, options = {}) {
   assert.deepEqual(printers.map((item) => item.serial), ["MS-3DP-001", "MS-3DP-002", "MS-3DP-003"]);
 
   for (const record of await listMachineRecords()) {
-    assert.deepEqual(Object.keys(record).sort(), ["Location", "Max_Booking_Duration", "Type", "description", "id", "serial"]);
+    assert.deepEqual(Object.keys(record).sort(), ["Location", "Max_Booking_Duration", "Type", "description", "id", "needsConfirmation", "serial"]);
   }
 
   const blocked = await machineStatus("eq-cutter-1");
@@ -97,7 +100,11 @@ function request(path, token, options = {}) {
   const details = await equipmentDetails("eq-3d-1");
   assert.equal(details.serial, "MS-3DP-001");
   assert.equal(details.rules, "Maximum booking duration: 180 minutes.");
+  assert.equal(details.needsConfirmation, false);
   assert.equal("Max_Booking_Duration" in details, false);
+  assert.equal((await equipmentDetails("eq-cutter-2")).needsConfirmation, true);
+  assert.equal((await equipmentDetails("eq-elec-2")).needsConfirmation, true);
+  assert.equal((await equipmentDetails("eq-printer-2")).needsConfirmation, false);
 
   await assert.rejects(buildList(requestWith(""), ""), (error) => error.code === "NoSession");
   const view = await buildList(requestWith(token), "лазерный резак");
@@ -317,6 +324,33 @@ function request(path, token, options = {}) {
     const again = await request(`/api/reservations/${soonId}/confirm`, token, { method: "POST" });
     assert.equal(again.status, 409);
     assert.equal(JSON.parse(again.body).error, "CannotConfirm");
+
+    safetyId = "res-check-safety";
+    await insertReservation({
+      id: safetyId,
+      equipmentId: "eq-cutter-2",
+      studentId: userId,
+      date: startStamp.date,
+      start: startStamp.time,
+      end: endStamp.time,
+      status: "Awaiting confirmation"
+    });
+    const unsafe = await buildReservation(requestWith(token), safetyId);
+    assert.equal(unsafe.needsConfirmation, true);
+    assert.equal(unsafe.canConfirm, true);
+    await assert.rejects(
+      confirmReservation(userId, safetyId, async () => true, {}),
+      (error) => error.code === "SafetyNotAcknowledged"
+    );
+    const denied = await request(`/api/reservations/${safetyId}/confirm`, token, {
+      method: "POST",
+      body: {}
+    });
+    assert.equal(denied.status, 422);
+    assert.equal(JSON.parse(denied.body).error, "SafetyNotAcknowledged");
+    const acknowledged = await confirmReservation(userId, safetyId, async () => true, { acknowledged: true });
+    assert.equal(acknowledged.status, "Confirmed");
+    assert.equal(acknowledged.message, "Reservation confirmed.");
   }
 
   cancelId = "res-check-cancel";
@@ -447,7 +481,16 @@ function request(path, token, options = {}) {
   assert.equal(blockedWithCancel.mailSent, true);
   const cancelledRow = (await listReservationRecords()).find((item) => item.id === blockReservationId);
   assert.equal(cancelledRow.status, "Cancelled");
+  const notices = await request("/api/notices", token);
+  assert.equal(notices.status, 200);
+  const notice = JSON.parse(notices.body).notices.find((item) => item.id === blockReservationId);
+  assert.equal(notice.reason, "Maintenance");
+  assert.equal(notice.equipment, "3D printer");
+  assert.equal(notice.start, "16:00");
+  assert.equal(notice.end, "17:00");
   await setMachineBlock("eq-3d-1", { open: true, reason: "", period: "", blockStart: "", blockEnd: "" });
+  const cleared = await request("/api/notices", token);
+  assert.equal(JSON.parse(cleared.body).notices.some((item) => item.id === blockReservationId), false);
 
   const blockedMachine = await request("/api/staff/equipment/eq-elec-1/block", staffAccount.token, {
     method: "POST",
@@ -577,6 +620,7 @@ function request(path, token, options = {}) {
   } finally {
     if (bookedId) await deleteReservation(bookedId);
     if (soonId) await deleteReservation(soonId);
+    if (safetyId) await deleteReservation(safetyId);
     if (cancelId) await deleteReservation(cancelId);
     if (pastCancelId) await deleteReservation(pastCancelId);
     if (reportReservationId) await deleteReservation(reportReservationId);

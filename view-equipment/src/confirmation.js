@@ -97,17 +97,20 @@ async function sweepReservations(mail = sendMail, now = new Date()) {
   }
 }
 
-async function confirmReservation(userId, id, mail = sendMail) {
+async function confirmReservation(userId, id, mail = sendMail, input = {}) {
   const owned = await storage.listOwnedReservations(userId);
   const existing = owned.find((item) => item.id === id);
   if (!existing) throw new ContractError("ReservationNotFound");
   if (existing.status !== "Awaiting confirmation" || !confirmWindow(existing.date, existing.start)) {
     throw new ContractError("CannotConfirm");
   }
+  const machine = await storage.findMachineRecord(existing.equipmentId);
+  if (machine.needsConfirmation && input.acknowledged !== true) {
+    throw new ContractError("SafetyNotAcknowledged");
+  }
   const saved = await storage.confirmAwaiting(userId, id);
   if (!saved) throw new ContractError("CannotConfirm");
   const user = await storage.findUserById(userId);
-  const machine = await storage.findMachineRecord(existing.equipmentId);
   const view = {
     equipment: machine.Type,
     location: machine.Location,

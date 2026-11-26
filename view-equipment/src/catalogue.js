@@ -44,8 +44,9 @@ async function equipmentDetails(id) {
     location: record.Location,
     serial: record.serial || "",
     description: record.description ?? "",
-    rules: rulesOfUse(record.Max_Booking_Duration)
+    rules: rulesOfUse(record.Max_Booking_Duration),
+    needsConfirmation: record.needsConfirmation === true
   };
 }
 
-module.exports = { listEquipment, equipmentDetails };
+module.exports = { listEquipment, equipmentDetails, rulesOfUse };

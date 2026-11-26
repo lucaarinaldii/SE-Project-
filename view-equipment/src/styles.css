@@ -672,6 +672,46 @@ input, select {
   margin-top: var(--space-md);
 }
 
+.safety-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0;
+  font-weight: 500;
+}
+
+.safety-check input {
+  width: 18px;
+  min-width: 18px;
+  min-height: 18px;
+  margin-top: 3px;
+  padding: 0;
+  flex: 0 0 auto;
+}
+
+.block-notices {
+  display: grid;
+  gap: 10px;
+  margin-top: var(--space-lg);
+}
+
+.block-notice {
+  padding: 14px 16px;
+  border: 1px solid #fdba74;
+  border-left: 4px solid #ea580c;
+  border-radius: 12px;
+  background: #ffedd5;
+  color: #9a3412;
+}
+
+.block-notice strong {
+  display: block;
+  margin-bottom: 4px;
+  color: #c2410c;
+}
+
+.block-notice p { margin: 0; }
+
 textarea {
   width: 100%;
   min-height: 96px;

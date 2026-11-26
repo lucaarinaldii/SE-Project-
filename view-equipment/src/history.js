@@ -1,4 +1,5 @@
 const storage = require("./storage");
+const { rulesOfUse } = require("./catalogue");
 const { confirmWindow, canCancelReservation } = require("./confirmation");
 const { canReport } = require("./report");
 const { ContractError } = require("./errors");
@@ -30,6 +31,8 @@ function present(reservation, machines, report) {
     end: reservation.end,
     status: reservation.status,
     canConfirm: reservation.status === "Awaiting confirmation" && confirmWindow(reservation.date, reservation.start),
+    needsConfirmation: Boolean(machine && machine.needsConfirmation),
+    rules: machine ? rulesOfUse(machine.Max_Booking_Duration) : "",
     canCancel: canCancelReservation(reservation),
     canReport: canReport(reservation) && !report,
     report: report ? {
@@ -135,4 +138,8 @@ async function reservationDetails(userId, id) {
   return presented;
 }
 
-module.exports = { myReservations, allReservations, reservationDetails };
+async function blockNotices(userId) {
+  return { notices: await storage.listBlockNotices(userId) };
+}
+
+module.exports = { myReservations, allReservations, reservationDetails, blockNotices };

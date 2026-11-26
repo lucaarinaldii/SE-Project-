@@ -19,6 +19,7 @@
     "Max_Booking_Duration": 90,
     "Min_Threshold": 1,
     "description": "Laser cutter for acrylic and wood.",
+    "needsConfirmation": true,
     "storedStatus": { "Get_Status": true, "Is_Open": false },
     "reason": "Lens replacement",
     "period": "5 Nov 2026 – 30 Nov 2026",
@@ -33,6 +34,7 @@
     "Max_Booking_Duration": 120,
     "Min_Threshold": 5,
     "description": "",
+    "needsConfirmation": true,
     "storedStatus": { "Get_Status": true, "Is_Open": true },
     "reason": "",
     "period": ""
@@ -81,6 +83,7 @@
     "Max_Booking_Duration": 90,
     "Min_Threshold": 1,
     "description": "Laser cutter for acrylic and wood.",
+    "needsConfirmation": true,
     "storedStatus": { "Get_Status": true, "Is_Open": true },
     "reason": "",
     "period": ""
@@ -93,6 +96,7 @@
     "Max_Booking_Duration": 90,
     "Min_Threshold": 1,
     "description": "Laser cutter for acrylic and wood.",
+    "needsConfirmation": true,
     "storedStatus": { "Get_Status": true, "Is_Open": true },
     "reason": "",
     "period": ""
@@ -105,6 +109,7 @@
     "Max_Booking_Duration": 120,
     "Min_Threshold": 5,
     "description": "",
+    "needsConfirmation": true,
     "storedStatus": { "Get_Status": true, "Is_Open": true },
     "reason": "",
     "period": ""
@@ -117,6 +122,7 @@
     "Max_Booking_Duration": 120,
     "Min_Threshold": 5,
     "description": "",
+    "needsConfirmation": true,
     "storedStatus": { "Get_Status": true, "Is_Open": true },
     "reason": "",
     "period": ""
