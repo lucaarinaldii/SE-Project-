@@ -24,16 +24,24 @@ const manageMessage = document.querySelector("#manageMessage");
 const manageList = document.querySelector("#manageList");
 const manageDetails = document.querySelector("#manageDetails");
 let selectedMaterialId = "";
+let materialRows = [];
+let materialType = "";
 let selectedAccountId = "";
 let materialsCanManage = false;
 let pendingBlockReason = "";
-let pendingTicketEquipment = "";
+let ticketRows = [];
+let ticketTypes = [];
+let ticketType = "";
+let pendingTicketType = "";
+let accountRows = [];
+let accountQuery = "";
 let ticketGroup = "open";
 let selectedTicketId = "";
 let accountRole = "";
 let historyScope = "mine";
 let historyRows = [];
 let pendingProfileUser = "";
+let pendingReservationId = "";
 const historyMessage = document.querySelector("#historyMessage");
 const historyList = document.querySelector("#historyList");
 const historyDetails = document.querySelector("#historyDetails");
@@ -93,6 +101,7 @@ function fillAccount(account) {
   document.querySelector("#openStaff").hidden = account.role !== "staff";
   document.querySelector("#openTickets").hidden = account.role !== "staff";
   document.querySelector("#openAllReservations").hidden = account.role !== "staff";
+  document.querySelector("#openMaterials").hidden = account.role !== "staff";
   document.querySelector("#openManage").hidden = account.role !== "staff";
 }
 
@@ -538,13 +547,19 @@ function showHistoryError(error) {
 async function fillEquipmentChoices() {
   if (historyEquipment.dataset.ready === "true") return;
   const data = await readJson(await fetch("/api/catalogue?type=", { headers: sessionHeader() }));
-  historyEquipment.insertAdjacentHTML("beforeend", data.equipment.map((item) => (
-    `<option value="${escapeHtml(item.id)}">${escapeHtml(item.type)} · ${escapeHtml(item.serial)}</option>`
+  const types = [];
+  for (const item of data.equipment) {
+    if (!types.includes(item.type)) types.push(item.type);
+  }
+  historyEquipment.insertAdjacentHTML("beforeend", types.map((type) => (
+    `<option value="${escapeHtml(type)}">${escapeHtml(type)}</option>`
   )).join(""));
   historyEquipment.dataset.ready = "true";
 }
 
 async function loadHistory(options = {}) {
+  const openReservation = pendingReservationId;
+  pendingReservationId = "";
   await fillEquipmentChoices();
   if (!options.silent) renderFilterChips();
   if (!options.silent) {
@@ -588,6 +603,9 @@ async function loadHistory(options = {}) {
       ${reservationActions(item)}
     </div>
   `).join("");
+  if (openReservation && historyRows.some((item) => item.id === openReservation)) {
+    await loadReservation(openReservation);
+  }
   if (!options.silent || !openId || historyScope === "all") return;
   const open = data.reservations.find((item) => item.id === openId);
   const showingConfirm = Boolean(historyDetails.querySelector("#confirmReservation"));
@@ -781,6 +799,7 @@ async function loadDetails(id) {
       <dt>Location</dt><dd>${escapeHtml(item.location)}</dd>
       <dt>Description</dt><dd>${item.description || "—"}</dd>
       <dt>Rules of use</dt><dd>${item.rules || "—"}</dd>
+      <dt>Material</dt><dd data-material-level>${escapeHtml(materialLine(item.material))}</dd>
       <dt>Status</dt><dd>${statusLabel(item)}</dd>
     </dl>
     <section class="availability">
@@ -862,6 +881,9 @@ async function bookSlot(id, start, end, button) {
     throw error;
   }
   await loadAvailability(id);
+  const fresh = await readJson(await fetch(`/api/equipment/${encodeURIComponent(id)}`, { headers: sessionHeader() }));
+  const materialCell = document.querySelector("#details [data-material-level]");
+  if (materialCell) materialCell.textContent = materialLine(fresh.material);
   const slotMessage = document.querySelector("#availabilityMessage");
   setBanner(slotMessage, data.message, "is-open");
 }
@@ -996,27 +1018,34 @@ function renderTicketDetails(item) {
   `;
 }
 
-async function loadTickets() {
-  const params = new URLSearchParams({ group: ticketGroup });
-  const equipment = pendingTicketEquipment || document.querySelector("#ticketEquipment").value;
-  pendingTicketEquipment = "";
-  const date = document.querySelector("#ticketDate").value;
-  if (equipment) params.set("equipment", equipment);
-  if (date) params.set("date", date);
-  const data = await readJson(await fetch(`/api/tickets?${params}`, { headers: sessionHeader() }));
-  const select = document.querySelector("#ticketEquipment");
-  const chosen = equipment;
-  select.innerHTML = [`<option value="">All equipment</option>`].concat(data.equipment.map((item) => (
-    `<option value="${escapeHtml(item.id)}">${escapeHtml(item.type)} · ${escapeHtml(item.serial)}</option>`
-  ))).join("");
-  if ([...select.options].some((option) => option.value === chosen)) select.value = chosen;
+function visibleTickets() {
+  return ticketRows.filter((item) => !ticketType || item.equipment === ticketType);
+}
+
+function renderTicketChips() {
+  const order = ["3D printer", "laser cutter", "electronics workstation", "printer"];
+  const types = [...ticketTypes].sort((left, right) => {
+    const leftIndex = order.indexOf(left);
+    const rightIndex = order.indexOf(right);
+    return (leftIndex < 0 ? order.length : leftIndex) - (rightIndex < 0 ? order.length : rightIndex);
+  });
+  const chips = [{ value: "", label: "All" }].concat(types.map((type) => ({ value: type, label: type })));
+  document.querySelector("#ticketTypeChips").innerHTML = chips.map((chip) => {
+    const selected = chip.value === ticketType;
+    return `<button class="chip${selected ? " is-selected" : ""}" type="button" data-ticket-type="${escapeHtml(chip.value)}" aria-pressed="${selected}">${escapeHtml(chip.label)}</button>`;
+  }).join("");
+}
+
+function renderTickets(message) {
+  renderTicketChips();
   for (const [id, group] of [["ticketsOpenTab", "open"], ["ticketsCompletedTab", "completed"]]) {
     const tab = document.querySelector(`#${id}`);
     const selected = ticketGroup === group;
     tab.classList.toggle("is-selected", selected);
     tab.setAttribute("aria-selected", selected ? "true" : "false");
   }
-  ticketsList.innerHTML = data.tickets.map((item) => `
+  const visible = visibleTickets();
+  ticketsList.innerHTML = visible.map((item) => `
     <button class="card${item.id === selectedTicketId ? " is-selected" : ""}" type="button" data-ticket="${escapeHtml(item.id)}" ${item.id === selectedTicketId ? "aria-current=\"true\"" : ""}>
       <span class="card-top">
         <span class="card-title">${escapeHtml(item.equipment || "Equipment")}${item.serial ? ` · ${escapeHtml(item.serial)}` : ""}</span>
@@ -1026,11 +1055,11 @@ async function loadTickets() {
       <span class="card-status">${escapeHtml(ticketWhen(item))}</span>
     </button>
   `).join("");
-  setBanner(ticketsMessage, data.message, "is-warning");
-  const selected = data.tickets.find((item) => item.id === selectedTicketId);
+  setBanner(ticketsMessage, visible.length === 0 ? (message || "No tickets found") : "", "is-warning");
+  const selected = visible.find((item) => item.id === selectedTicketId);
   if (selected) renderTicketDetails(selected);
   else {
-    selectedTicketId = "";
+    if (!ticketRows.some((item) => item.id === selectedTicketId)) selectedTicketId = "";
     ticketsDetails.innerHTML = `
       <div class="empty">
         <p class="eyebrow">Ticket</p>
@@ -1039,6 +1068,20 @@ async function loadTickets() {
       </div>
     `;
   }
+}
+
+async function loadTickets() {
+  if (pendingTicketType) {
+    ticketType = pendingTicketType;
+    pendingTicketType = "";
+  }
+  const params = new URLSearchParams({ group: ticketGroup });
+  const date = document.querySelector("#ticketDate").value;
+  if (date) params.set("date", date);
+  const data = await readJson(await fetch(`/api/tickets?${params}`, { headers: sessionHeader() }));
+  ticketRows = data.tickets || [];
+  ticketTypes = [...new Set((data.equipment || []).map((item) => item.type))];
+  renderTickets(data.message);
   return data;
 }
 
@@ -1061,7 +1104,12 @@ document.querySelector("#ticketsCompletedTab").addEventListener("click", () => {
   loadTickets().catch(showTicketsError);
 });
 
-document.querySelector("#ticketEquipment").addEventListener("change", () => loadTickets().catch(showTicketsError));
+document.querySelector("#ticketTypeChips").addEventListener("click", (event) => {
+  const chip = event.target.closest("[data-ticket-type]");
+  if (!chip) return;
+  ticketType = chip.dataset.ticketType;
+  renderTickets("");
+});
 document.querySelector("#ticketDate").addEventListener("change", () => loadTickets().catch(showTicketsError));
 
 function profilePanel(profile) {
@@ -1192,10 +1240,32 @@ function staffBadge(item) {
   return `<span class="badge open">${mark("open")}Open</span>`;
 }
 
-async function loadStaff() {
-  const data = await readJson(await fetch("/api/staff/equipment", { headers: sessionHeader() }));
+let staffRows = [];
+let staffType = "";
+
+function visibleStaff() {
+  return staffRows.filter((item) => !staffType || item.type === staffType);
+}
+
+function renderStaffChips() {
+  const order = ["3D printer", "laser cutter", "electronics workstation", "printer"];
+  const types = [...new Set(staffRows.map((item) => item.type))].sort((left, right) => {
+    const leftIndex = order.indexOf(left);
+    const rightIndex = order.indexOf(right);
+    return (leftIndex < 0 ? order.length : leftIndex) - (rightIndex < 0 ? order.length : rightIndex);
+  });
+  const chips = [{ value: "", label: "All" }].concat(types.map((type) => ({ value: type, label: type })));
+  document.querySelector("#staffTypeChips").innerHTML = chips.map((chip) => {
+    const selected = chip.value === staffType;
+    return `<button class="chip${selected ? " is-selected" : ""}" type="button" data-staff-type="${escapeHtml(chip.value)}" aria-pressed="${selected}">${escapeHtml(chip.label)}</button>`;
+  }).join("");
+}
+
+function renderStaff() {
+  renderStaffChips();
   const selected = staffDetails.dataset.id || "";
-  staffList.innerHTML = data.equipment.map((item) => `
+  const visible = visibleStaff();
+  staffList.innerHTML = visible.map((item) => `
     <button class="card${item.id === selected ? " is-selected" : ""}" type="button" data-staff="${escapeHtml(item.id)}" ${item.id === selected ? "aria-current=\"true\"" : ""}>
       <span class="card-top">
         <span class="card-title">${escapeHtml(item.type)}</span>
@@ -1206,8 +1276,24 @@ async function loadStaff() {
       <span class="card-status">${escapeHtml(statusLabel(item))}</span>
     </button>
   `).join("");
-  const current = data.equipment.find((item) => item.id === selected);
+  const current = visible.find((item) => item.id === selected);
   if (current) renderStaffDetails(current);
+  else {
+    if (!staffRows.some((item) => item.id === selected)) delete staffDetails.dataset.id;
+    staffDetails.innerHTML = `
+      <div class="empty">
+        <p class="eyebrow">Machine</p>
+        <h2>Pick one</h2>
+        <p>Choose a machine to block it or open it again.</p>
+      </div>
+    `;
+  }
+}
+
+async function loadStaff() {
+  const data = await readJson(await fetch("/api/staff/equipment", { headers: sessionHeader() }));
+  staffRows = data.equipment || [];
+  renderStaff();
 }
 
 function renderStaffDetails(item) {
@@ -1239,11 +1325,18 @@ function renderStaffDetails(item) {
       </div>
     </form>
     <div class="block-actions staff-links">
-      <button class="ghost" type="button" data-staff-tickets="${escapeHtml(item.id)}">Tickets for this machine</button>
+      <button class="ghost" type="button" data-staff-tickets="${escapeHtml(item.id)}" data-staff-ticket-type="${escapeHtml(item.type)}">Tickets for this machine</button>
       <button class="ghost" type="button" data-staff-materials="${escapeHtml(item.id)}">Materials</button>
     </div>
   `;
 }
+
+document.querySelector("#staffTypeChips").addEventListener("click", (event) => {
+  const chip = event.target.closest("[data-staff-type]");
+  if (!chip) return;
+  staffType = chip.dataset.staffType;
+  renderStaff();
+});
 
 staffList.addEventListener("click", (event) => {
   const card = event.target.closest("[data-staff]");
@@ -1551,6 +1644,12 @@ setInterval(() => {
   loadHistory({ silent: true }).catch(() => {});
 }, 30000);
 
+setInterval(() => {
+  if (!token || materialsView.hidden) return;
+  if (document.activeElement && document.activeElement.id === "materialQuantity") return;
+  loadMaterials().catch(() => {});
+}, 15000);
+
 typeSelect.addEventListener("change", () => loadCatalogue().catch(showError));
 
 list.addEventListener("click", (event) => {
@@ -1599,8 +1698,8 @@ function openBlockMachine(id, reason) {
   goTo("#/staff", showStaff);
 }
 
-function openMachineTickets(id, ticketId) {
-  pendingTicketEquipment = id;
+function openMachineTickets(id, ticketId, type) {
+  pendingTicketType = type || "";
   selectedTicketId = ticketId || "";
   ticketGroup = "open";
   goTo("#/tickets", showTickets);
@@ -1624,7 +1723,7 @@ ticketsDetails.addEventListener("click", (event) => {
 staffDetails.addEventListener("click", (event) => {
   const tickets = event.target.closest("[data-staff-tickets]");
   if (tickets) {
-    openMachineTickets(tickets.dataset.staffTickets);
+    openMachineTickets(tickets.dataset.staffTickets, "", tickets.dataset.staffTicketType);
     return;
   }
   const materials = event.target.closest("[data-staff-materials]");
@@ -1646,7 +1745,7 @@ function materialStateLabel(state) {
 }
 
 function materialAmount(item) {
-  return `Level ${item.quantity} · minimum ${item.minimum}`;
+  return `${item.quantity} of ${item.capacity}`;
 }
 
 function showMaterialsError(error) {
@@ -1660,7 +1759,98 @@ function showMaterialsError(error) {
   setBanner(materialsMessage, text || "Something went wrong.", "is-blocked");
 }
 
+function materialLine(material) {
+  if (!material) return "—";
+  const label = material.state === "ok" ? "In stock" : material.state === "low" ? "Low" : "Empty";
+  return `${material.name} · ${label} · ${material.percent}% · ${material.quantity} of ${material.capacity} ${material.unit}`;
+}
+
+function shortChartDay(iso) {
+  const date = parseIsoDate(iso);
+  const month = new Intl.DateTimeFormat("en-GB", { month: "short" }).format(date);
+  return `${date.getDate()} ${month}`;
+}
+
+function chartTime(item) {
+  const value = Date.parse(`${item.date}T${item.start}:00`);
+  return Number.isNaN(value) ? 0 : value;
+}
+
+function materialChart(item) {
+  const uses = item.uses || [];
+  if (uses.length === 0) {
+    return `<p class="note">No reservation has used this material yet.</p>`;
+  }
+  const capacity = item.capacity || 1;
+  const ceiling = 86;
+  const times = uses.map(chartTime);
+  const first = Math.min(...times);
+  const last = Math.max(...times);
+  const span = last - first;
+  const points = uses.map((use, index) => {
+    const along = span === 0 ? (uses.length === 1 ? 0.5 : index / (uses.length - 1)) : (chartTime(use) - first) / span;
+    const x = 8 + along * 84;
+    const stock = use.stockAfter == null ? item.quantity : use.stockAfter;
+    const y = Math.max(0, Math.min(ceiling, (stock / capacity) * ceiling));
+    return { ...use, x, y, stock };
+  });
+  const line = points.map((point) => `${point.x},${100 - point.y}`).join(" ");
+  return `
+    <section class="material-chart">
+      <p class="eyebrow">Stock over time</p>
+      <div class="xy-chart">
+        <div class="xy-y" aria-hidden="true">
+          <span class="xy-max" style="bottom:${ceiling}%">${capacity}</span>
+          <span class="xy-readout-y" hidden></span>
+        </div>
+        <div class="xy-main">
+          <div class="xy-plot" data-unit="${escapeHtml(item.unit)}">
+            <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+              <polyline points="${line}"></polyline>
+            </svg>
+            <span class="xy-guide-x" hidden></span>
+            <span class="xy-guide-y" hidden></span>
+            ${points.map((point) => `
+              <span class="xy-mark" style="left:${point.x}%; bottom:${point.y}%">
+                <button class="xy-point" type="button" data-chart-point="${escapeHtml(point.reservationId)}" data-stock="${point.stock}" data-when="${escapeHtml(`${shortChartDay(point.date)} ${point.start}`)}" aria-label="${escapeHtml(point.reservationId)}"></button>
+                <span class="xy-pop" hidden>
+                  <button type="button" data-open-reservation="${escapeHtml(point.reservationId)}">${escapeHtml(point.reservationId)}</button>
+                </span>
+              </span>
+            `).join("")}
+          </div>
+          <div class="xy-x" aria-hidden="true">
+            <span class="xy-readout-x" hidden></span>
+            <span class="xy-last">${escapeHtml(shortChartDay(uses[uses.length - 1].date))}</span>
+          </div>
+        </div>
+      </div>
+      <p class="note">Y is ${escapeHtml(item.unit)} left. X is the reservation time. Choose a point to see its reservation.</p>
+    </section>`;
+}
+
+function openStaffReservation(id) {
+  pendingReservationId = id;
+  pendingProfileUser = "";
+  document.querySelector("#historyDate").value = "";
+  document.querySelector("#historyEquipment").value = "";
+  document.querySelector("#historyStatus").value = "";
+  const user = document.querySelector("#historyUser");
+  if (user) user.value = "";
+  if (location.hash !== "#/reservations") location.hash = "#/reservations";
+  else showAllReservations();
+}
+
+function levelMeter(item) {
+  const tone = item.state === "ok" ? "is-ok" : item.state === "low" ? "is-low" : "is-empty";
+  return `<span class="level-track" aria-hidden="true"><span class="level-fill ${tone}" style="width:${item.percent}%"></span></span>`;
+}
+
 function showMaterials() {
+  if (accountRole !== "staff") {
+    showAccount();
+    return;
+  }
   chooseView.hidden = true;
   accountView.hidden = true;
   staffView.hidden = true;
@@ -1682,14 +1872,14 @@ function showMaterials() {
 function renderMaterialDetails(item) {
   const staffPart = materialsCanManage ? `
     <form id="materialForm" class="block-form">
-      <label for="materialQuantity">New level</label>
-      <input id="materialQuantity" type="number" min="0" max="9999" step="1" value="${item.quantity}">
+      <label for="materialQuantity">New level (${escapeHtml(item.unit)})</label>
+      <input id="materialQuantity" type="number" min="0" max="${item.capacity}" step="1" value="${item.quantity}">
       <div class="block-actions">
         <button class="primary" type="submit">Update level</button>
       </div>
     </form>
     <div class="block-actions staff-links">
-      ${item.ticketId ? `<button class="ghost" type="button" data-material-ticket="${escapeHtml(item.equipmentId)}" data-ticket-id="${escapeHtml(item.ticketId)}">View ticket</button>` : ""}
+      ${item.ticketId ? `<button class="ghost" type="button" data-material-ticket="${escapeHtml(item.equipmentId)}" data-ticket-id="${escapeHtml(item.ticketId)}" data-material-ticket-type="${escapeHtml(item.equipment)}">View ticket</button>` : ""}
       <button class="ghost" type="button" data-material-block="${escapeHtml(item.equipmentId)}" data-block-reason="${item.state === "ok" ? "" : "Low material"}">Block machine</button>
     </div>
   ` : "";
@@ -1698,30 +1888,55 @@ function renderMaterialDetails(item) {
     <p class="eyebrow">Material</p>
     <h2>${escapeHtml(item.equipment)}</h2>
     <p class="card-location">${item.serial ? `${escapeHtml(item.serial)} · ` : ""}${escapeHtml(item.location)}</p>
-    <p><span class="badge ${materialStateClass(item.state)}">${materialStateLabel(item.state)}</span></p>
-    <p class="card-status">${escapeHtml(materialAmount(item))}</p>
+    <p><span class="badge ${materialStateClass(item.state)}">${materialStateLabel(item.state)}</span> ${item.percent}%</p>
+    ${levelMeter(item)}
+    <p class="card-status">${escapeHtml(item.name)} · ${escapeHtml(materialAmount(item))} ${escapeHtml(item.unit)} · full stock ${item.capacity} ${escapeHtml(item.unit)}</p>
+    <p class="note">One booked hour uses ${item.usePerHour} ${escapeHtml(item.unit)}.</p>
+    ${materialChart(item)}
     ${staffPart}
   `;
 }
 
-async function loadMaterials() {
-  const data = await readJson(await fetch("/api/materials", { headers: sessionHeader() }));
-  materialsCanManage = data.canManage === true;
-  materialsList.innerHTML = data.materials.map((item) => `
+function visibleMaterials() {
+  return materialRows
+    .filter((item) => !materialType || item.equipment === materialType)
+    .slice()
+    .sort((left, right) => left.percent - right.percent || left.serial.localeCompare(right.serial));
+}
+
+function renderMaterialChips() {
+  const order = ["3D printer", "laser cutter", "electronics workstation", "printer"];
+  const types = [...new Set(materialRows.map((item) => item.equipment))].sort((left, right) => {
+    const leftIndex = order.indexOf(left);
+    const rightIndex = order.indexOf(right);
+    return (leftIndex < 0 ? order.length : leftIndex) - (rightIndex < 0 ? order.length : rightIndex);
+  });
+  const chips = [{ value: "", label: "All" }].concat(types.map((type) => ({ value: type, label: type })));
+  document.querySelector("#materialsTypeChips").innerHTML = chips.map((chip) => {
+    const selected = chip.value === materialType;
+    return `<button class="chip${selected ? " is-selected" : ""}" type="button" data-material-type="${escapeHtml(chip.value)}" aria-pressed="${selected}">${escapeHtml(chip.label)}</button>`;
+  }).join("");
+}
+
+function renderMaterials(message) {
+  renderMaterialChips();
+  const visible = visibleMaterials();
+  materialsList.innerHTML = visible.map((item) => `
     <button class="card${item.id === selectedMaterialId ? " is-selected" : ""}" type="button" data-material="${escapeHtml(item.id)}" ${item.id === selectedMaterialId ? "aria-current=\"true\"" : ""}>
       <span class="card-top">
         <span class="card-title">${escapeHtml(item.equipment)}</span>
         <span class="badge ${materialStateClass(item.state)}">${materialStateLabel(item.state)}</span>
       </span>
-      <span class="card-location">${item.serial ? `${escapeHtml(item.serial)} · ` : ""}${escapeHtml(item.location)}</span>
-      <span class="card-status">${escapeHtml(materialAmount(item))}</span>
+      <span class="card-location">${escapeHtml(item.name)} · ${item.serial ? `${escapeHtml(item.serial)} · ` : ""}${escapeHtml(item.location)}</span>
+      ${levelMeter(item)}
+      <span class="card-status">${item.percent}% · ${escapeHtml(materialAmount(item))} ${escapeHtml(item.unit)}</span>
     </button>
   `).join("");
-  setBanner(materialsMessage, data.message, "is-warning");
-  const selected = data.materials.find((item) => item.id === selectedMaterialId);
+  setBanner(materialsMessage, visible.length === 0 && materialType ? "No materials found" : message, "is-warning");
+  const selected = visible.find((item) => item.id === selectedMaterialId);
   if (selected) renderMaterialDetails(selected);
   else {
-    selectedMaterialId = "";
+    if (!materialRows.some((item) => item.id === selectedMaterialId)) selectedMaterialId = "";
     delete materialsDetails.dataset.id;
     materialsDetails.innerHTML = `
       <div class="empty">
@@ -1731,6 +1946,16 @@ async function loadMaterials() {
       </div>
     `;
   }
+}
+
+async function loadMaterials() {
+  const data = await readJson(await fetch("/api/materials", { headers: sessionHeader() }));
+  materialsCanManage = data.canManage === true;
+  materialRows = data.materials || [];
+  pageLede.textContent = materialsCanManage
+    ? "Material level for each machine. Update a level, or block a machine that has run out."
+    : "How much material is left for each machine.";
+  renderMaterials(data.message);
   return data;
 }
 
@@ -1743,6 +1968,13 @@ async function updateMaterialLevel(id, quantity) {
   await loadMaterials();
   setBanner(materialsMessage, data.message, data.state === "ok" ? "is-open" : "is-warning");
 }
+
+document.querySelector("#materialsTypeChips").addEventListener("click", (event) => {
+  const chip = event.target.closest("[data-material-type]");
+  if (!chip) return;
+  materialType = chip.dataset.materialType;
+  renderMaterials("");
+});
 
 materialsList.addEventListener("click", (event) => {
   const card = event.target.closest("[data-material]");
@@ -1758,10 +1990,11 @@ materialsDetails.addEventListener("submit", (event) => {
   event.preventDefault();
   const input = document.querySelector("#materialQuantity");
   const value = input.value.trim() === "" ? NaN : Number(input.value);
-  const invalid = !Number.isInteger(value) || value < 0 || value > 9999;
+  const max = Number(input.max);
+  const invalid = !Number.isInteger(value) || value < 0 || value > max;
   input.classList.toggle("is-invalid", invalid);
   if (invalid) {
-    setBanner(materialsMessage, "Enter a whole number from 0 to 9999.", "is-blocked");
+    setBanner(materialsMessage, `Enter a whole number from 0 to ${max}.`, "is-blocked");
     return;
   }
   const button = form.querySelector("button[type='submit']");
@@ -1773,13 +2006,59 @@ materialsDetails.addEventListener("submit", (event) => {
 });
 
 materialsDetails.addEventListener("click", (event) => {
+  const reservation = event.target.closest("[data-open-reservation]");
+  if (reservation) {
+    openStaffReservation(reservation.dataset.openReservation);
+    return;
+  }
+  const point = event.target.closest("[data-chart-point]");
+  if (point) {
+    const plot = point.closest(".xy-plot");
+    const chart = point.closest(".xy-chart");
+    const pop = point.parentElement.querySelector(".xy-pop");
+    const show = pop.hidden;
+    const guideX = plot.querySelector(".xy-guide-x");
+    const guideY = plot.querySelector(".xy-guide-y");
+    const readoutY = chart.querySelector(".xy-readout-y");
+    const readoutX = chart.querySelector(".xy-readout-x");
+    const last = chart.querySelector(".xy-last");
+    const maxLabel = chart.querySelector(".xy-max");
+    plot.querySelectorAll(".xy-pop").forEach((item) => { item.hidden = true; });
+    plot.querySelectorAll(".xy-point").forEach((item) => item.classList.remove("is-selected"));
+    guideX.hidden = true;
+    guideY.hidden = true;
+    readoutY.hidden = true;
+    readoutX.hidden = true;
+    last.hidden = false;
+    maxLabel.hidden = false;
+    if (show) {
+      const mark = point.parentElement;
+      pop.hidden = false;
+      point.classList.add("is-selected");
+      guideX.hidden = false;
+      guideX.style.bottom = mark.style.bottom;
+      guideX.style.width = mark.style.left;
+      guideY.hidden = false;
+      guideY.style.left = mark.style.left;
+      guideY.style.height = mark.style.bottom;
+      readoutY.hidden = false;
+      readoutY.style.bottom = mark.style.bottom;
+      readoutY.textContent = `${point.dataset.stock} ${plot.dataset.unit}`;
+      readoutX.hidden = false;
+      readoutX.style.left = mark.style.left;
+      readoutX.textContent = point.dataset.when;
+      last.hidden = true;
+      maxLabel.hidden = parseFloat(mark.style.bottom) > 74;
+    }
+    return;
+  }
   const block = event.target.closest("[data-material-block]");
   if (block) {
     openBlockMachine(block.dataset.materialBlock, block.dataset.blockReason);
     return;
   }
   const ticket = event.target.closest("[data-material-ticket]");
-  if (ticket) openMachineTickets(ticket.dataset.materialTicket, ticket.dataset.ticketId);
+  if (ticket) openMachineTickets(ticket.dataset.materialTicket, ticket.dataset.ticketId, ticket.dataset.materialTicketType);
 });
 
 document.querySelector("#openMaterials").addEventListener("click", () => {
@@ -1850,9 +2129,17 @@ function renderManageDetails(item) {
   `;
 }
 
-async function loadManage() {
-  const data = await readJson(await fetch("/api/staff/accounts", { headers: sessionHeader() }));
-  manageList.innerHTML = data.accounts.map((item) => `
+function visibleAccounts() {
+  const query = accountQuery.trim().toLowerCase();
+  return accountRows.filter((item) => {
+    if (!query) return true;
+    return item.name.toLowerCase().includes(query) || item.email.toLowerCase().includes(query);
+  });
+}
+
+function renderManage() {
+  const visible = visibleAccounts();
+  manageList.innerHTML = visible.map((item) => `
     <button class="card${item.id === selectedAccountId ? " is-selected" : ""}" type="button" data-account="${escapeHtml(item.id)}" ${item.id === selectedAccountId ? "aria-current=\"true\"" : ""}>
       <span class="card-top">
         <span class="card-title">${escapeHtml(item.name)}</span>
@@ -1862,8 +2149,24 @@ async function loadManage() {
       <span class="card-status">${item.status === "suspended" ? `Until ${escapeHtml(item.until)}` : escapeHtml(roleLabel(item.role))}</span>
     </button>
   `).join("");
-  const selected = data.accounts.find((item) => item.id === selectedAccountId);
+  const selected = visible.find((item) => item.id === selectedAccountId);
   if (selected) renderManageDetails(selected);
+  else {
+    if (!accountRows.some((item) => item.id === selectedAccountId)) selectedAccountId = "";
+    manageDetails.innerHTML = `
+      <div class="empty">
+        <p class="eyebrow">Account</p>
+        <h2>Pick one</h2>
+        <p>${visible.length === 0 ? "No account matches that name or email." : "Choose an account to suspend it or to reactivate it."}</p>
+      </div>
+    `;
+  }
+}
+
+async function loadManage() {
+  const data = await readJson(await fetch("/api/staff/accounts", { headers: sessionHeader() }));
+  accountRows = data.accounts || [];
+  renderManage();
   return data;
 }
 
@@ -1894,6 +2197,11 @@ async function reactivateAccountRequest(id) {
   await loadManage();
   setBanner(manageMessage, data.message, "is-open");
 }
+
+document.querySelector("#accountSearch").addEventListener("input", (event) => {
+  accountQuery = event.target.value;
+  renderManage();
+});
 
 manageList.addEventListener("click", (event) => {
   const card = event.target.closest("[data-account]");

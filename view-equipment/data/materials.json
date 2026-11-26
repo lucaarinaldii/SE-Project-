@@ -2,109 +2,121 @@
   {
     "id": "mat-3d-1",
     "equipmentId": "eq-3d-1",
-    "name": "PLA filament",
-    "unit": "spools",
-    "quantity": 6,
-    "minThreshold": 2,
-    "capacity": 10
-  },
-  {
-    "id": "mat-cutter-1",
-    "equipmentId": "eq-cutter-1",
-    "name": "Acrylic sheets",
-    "unit": "sheets",
-    "quantity": 25,
-    "minThreshold": 8,
-    "capacity": 40
-  },
-  {
-    "id": "mat-elec-1",
-    "equipmentId": "eq-elec-1",
-    "name": "Solder wire",
-    "unit": "rolls",
-    "quantity": 7,
-    "minThreshold": 2,
-    "capacity": 10
-  },
-  {
-    "id": "mat-printer-1",
-    "equipmentId": "eq-printer-1",
-    "name": "Paper",
-    "unit": "reams",
-    "quantity": 8,
-    "minThreshold": 3,
-    "capacity": 12
+    "name": "PLA filament, 1.75 mm",
+    "unit": "g",
+    "quantity": 1000,
+    "minimum": 150,
+    "capacity": 1000,
+    "usePerHour": 20
   },
   {
     "id": "mat-3d-2",
     "equipmentId": "eq-3d-2",
-    "name": "PLA filament",
-    "unit": "spools",
-    "quantity": 4,
-    "minThreshold": 2,
-    "capacity": 10
+    "name": "PLA filament, 1.75 mm",
+    "unit": "g",
+    "quantity": 1000,
+    "minimum": 150,
+    "capacity": 1000,
+    "usePerHour": 20
   },
   {
     "id": "mat-3d-3",
     "equipmentId": "eq-3d-3",
-    "name": "PLA filament",
-    "unit": "spools",
-    "quantity": 9,
-    "minThreshold": 2,
-    "capacity": 10
+    "name": "PLA filament, 1.75 mm",
+    "unit": "g",
+    "quantity": 1000,
+    "minimum": 150,
+    "capacity": 1000,
+    "usePerHour": 20
+  },
+  {
+    "id": "mat-cutter-1",
+    "equipmentId": "eq-cutter-1",
+    "name": "Acrylic sheet, 3 mm",
+    "unit": "sheets",
+    "quantity": 24,
+    "minimum": 4,
+    "capacity": 24,
+    "usePerHour": 1
   },
   {
     "id": "mat-cutter-2",
     "equipmentId": "eq-cutter-2",
-    "name": "Acrylic sheets",
+    "name": "Acrylic sheet, 3 mm",
     "unit": "sheets",
-    "quantity": 16,
-    "minThreshold": 8,
-    "capacity": 40
+    "quantity": 24,
+    "minimum": 4,
+    "capacity": 24,
+    "usePerHour": 1
   },
   {
     "id": "mat-cutter-3",
     "equipmentId": "eq-cutter-3",
-    "name": "Acrylic sheets",
+    "name": "Acrylic sheet, 3 mm",
     "unit": "sheets",
-    "quantity": 33,
-    "minThreshold": 8,
-    "capacity": 40
+    "quantity": 24,
+    "minimum": 4,
+    "capacity": 24,
+    "usePerHour": 1
+  },
+  {
+    "id": "mat-elec-1",
+    "equipmentId": "eq-elec-1",
+    "name": "Solder wire, 0.8 mm",
+    "unit": "g",
+    "quantity": 100,
+    "minimum": 20,
+    "capacity": 100,
+    "usePerHour": 10
   },
   {
     "id": "mat-elec-2",
     "equipmentId": "eq-elec-2",
-    "name": "Solder wire",
-    "unit": "rolls",
-    "quantity": 5,
-    "minThreshold": 2,
-    "capacity": 10
+    "name": "Solder wire, 0.8 mm",
+    "unit": "g",
+    "quantity": 100,
+    "minimum": 20,
+    "capacity": 100,
+    "usePerHour": 10
   },
   {
     "id": "mat-elec-3",
     "equipmentId": "eq-elec-3",
-    "name": "Solder wire",
-    "unit": "rolls",
-    "quantity": 9,
-    "minThreshold": 2,
-    "capacity": 10
+    "name": "Solder wire, 0.8 mm",
+    "unit": "g",
+    "quantity": 100,
+    "minimum": 20,
+    "capacity": 100,
+    "usePerHour": 10
+  },
+  {
+    "id": "mat-printer-1",
+    "equipmentId": "eq-printer-1",
+    "name": "A4 paper",
+    "unit": "sheets",
+    "quantity": 500,
+    "minimum": 50,
+    "capacity": 500,
+    "usePerHour": 25
   },
   {
     "id": "mat-printer-2",
     "equipmentId": "eq-printer-2",
-    "name": "Paper",
-    "unit": "reams",
-    "quantity": 6,
-    "minThreshold": 3,
-    "capacity": 12
+    "name": "A4 paper",
+    "unit": "sheets",
+    "quantity": 500,
+    "minimum": 50,
+    "capacity": 500,
+    "usePerHour": 25
   },
   {
     "id": "mat-printer-3",
     "equipmentId": "eq-printer-3",
-    "name": "Paper",
-    "unit": "reams",
-    "quantity": 10,
-    "minThreshold": 3,
-    "capacity": 12
+    "name": "A4 paper",
+    "unit": "sheets",
+    "quantity": 500,
+    "minimum": 50,
+    "capacity": 500,
+    "usePerHour": 25
   }
 ]

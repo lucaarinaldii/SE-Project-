@@ -109,7 +109,7 @@
             <button id="openStaff" class="ghost" type="button" hidden>Staff</button>
             <button id="openTickets" class="ghost" type="button" hidden>View tickets</button>
             <button id="openAllReservations" class="ghost" type="button" hidden>All reservations</button>
-            <button id="openMaterials" class="ghost" type="button">Materials</button>
+            <button id="openMaterials" class="ghost" type="button" hidden>Materials</button>
             <button id="openManage" class="ghost" type="button" hidden>Manage accounts</button>
             <button id="signOut" class="ghost" type="button">Sign out</button>
           </div>
@@ -187,6 +187,10 @@
             <div class="section-head">
               <h2>Machines</h2>
             </div>
+            <div class="filter-block">
+              <p id="staffTypeLabel" class="filter-label">Equipment</p>
+              <div id="staffTypeChips" class="chip-row" role="group" aria-labelledby="staffTypeLabel"></div>
+            </div>
             <div id="staffList" class="list"></div>
           </section>
           <article id="staffDetails" class="details">
@@ -205,11 +209,9 @@
           <button id="ticketsCompletedTab" class="chip" type="button" role="tab" aria-selected="false">Completed</button>
         </div>
         <section class="controls ticket-controls" aria-label="Ticket filters">
-          <div class="field">
-            <label for="ticketEquipment">Equipment</label>
-            <select id="ticketEquipment">
-              <option value="">All equipment</option>
-            </select>
+          <div class="filter-block">
+            <p id="ticketTypeLabel" class="filter-label">Equipment</p>
+            <div id="ticketTypeChips" class="chip-row" role="group" aria-labelledby="ticketTypeLabel"></div>
           </div>
           <div class="field">
             <label for="ticketDate">Date</label>
@@ -241,6 +243,10 @@
             <div class="section-head">
               <h2>Materials</h2>
             </div>
+            <div class="filter-block">
+              <p id="materialsTypeLabel" class="filter-label">Equipment</p>
+              <div id="materialsTypeChips" class="chip-row" role="group" aria-labelledby="materialsTypeLabel"></div>
+            </div>
             <div id="materialsList" class="list"></div>
           </section>
           <article id="materialsDetails" class="details">
@@ -259,6 +265,10 @@
           <section class="catalogue" aria-label="Accounts">
             <div class="section-head">
               <h2>Accounts</h2>
+            </div>
+            <div class="filter-block">
+              <label for="accountSearch" class="filter-label">Search</label>
+              <input id="accountSearch" type="search" placeholder="Name or email">
             </div>
             <div id="manageList" class="list"></div>
           </section>

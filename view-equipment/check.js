@@ -9,6 +9,7 @@ const { buildList, buildDetails, buildAvailability, buildHistory, buildReservati
 const { slotIsPast } = require("./src/availability");
 const { blockEquipment } = require("./src/staff");
 const { writeToUser } = require("./src/message");
+const { listMaterials } = require("./src/materials");
 const { handle } = require("./src/api");
 
 function requestWith(token) {
@@ -110,6 +111,11 @@ function request(path, token, options = {}) {
   assert.equal(card.status, "blocked");
   assert.match(card.rules, /30 minutes/);
   assert.equal("blockStart" in card, false);
+  assert.equal(card.material.name, "A4 paper");
+  assert.equal(card.material.capacity, 500);
+  assert.equal(card.material.minimum, 50);
+  assert.equal(["ok", "low", "empty"].includes(card.material.state), true);
+  assert.equal("material" in view.equipment[0], false);
 
   const reservations = await listReservationRecords();
   assert.equal(reservations.some((item) => "studentId" in item), false);
@@ -207,6 +213,10 @@ function request(path, token, options = {}) {
   assert.equal(historyIds.indexOf("res-3d-cancelled") < historyIds.indexOf("res-3d-morning"), true);
   assert.equal(history.reservations.some((item) => "studentId" in item), false);
   assert.equal(history.message, "");
+  const byType = await buildHistory(requestWith(token), { equipment: "3D printer", date: "2026-11-19" });
+  assert.equal(byType.reservations.every((item) => item.equipment === "3D printer"), true);
+  assert.equal(byType.reservations.some((item) => item.id === "res-3d-cancelled"), true);
+  await assert.rejects(buildHistory(requestWith(token), { equipment: "missing-type" }), (error) => error.code === "EquipmentNotFound");
   const cancelled = await buildHistory(requestWith(token), { status: "Cancelled", equipment: "eq-3d-1", date: "2026-11-19" });
   assert.equal(cancelled.reservations.every((item) => item.status === "Cancelled" && item.date === "2026-11-19"), true);
   assert.equal(cancelled.reservations.some((item) => item.id === "res-3d-cancelled"), true);
@@ -242,10 +252,14 @@ function request(path, token, options = {}) {
   await assert.rejects(createReservation(requestWith(token), {
     equipmentId: "eq-cutter-1", date: "2026-11-25", start: "09:00", end: "10:00"
   }), (error) => error.code === (slotIsPast("2026-11-25", "09:00") ? "PastSlot" : "MachineBlocked"));
+  const stockBefore = (await listMaterials(true)).materials.find((item) => item.id === "eq-3d-1");
   const made = await createReservation(requestWith(token), {
     equipmentId: "eq-3d-1", date: "2026-12-03", start: "09:00", end: "10:00"
   });
   bookedId = made.id;
+  const stockAfter = (await listMaterials(true)).materials.find((item) => item.id === "eq-3d-1");
+  assert.equal(stockAfter.quantity, Math.max(0, stockBefore.quantity - stockBefore.usePerHour));
+  assert.equal(stockAfter.uses.some((item) => item.reservationId === bookedId && item.amount === stockBefore.usePerHour), true);
   assert.equal(made.status, "Awaiting confirmation");
   assert.equal(made.message, "Reservation created. Status: Awaiting confirmation.");
   assert.equal("studentId" in made, false);

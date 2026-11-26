@@ -47,6 +47,16 @@ async function withReports(reservations, machines) {
   return reservations.map((item) => present(item, machines, byReservation.get(item.id) || null));
 }
 
+function equipmentIds(equipment, machines) {
+  if (!equipment) return null;
+  if (machines.has(equipment)) return new Set([equipment]);
+  const ids = [...machines.entries()]
+    .filter(([, machine]) => machine.Type === equipment)
+    .map(([id]) => id);
+  if (ids.length === 0) throw new ContractError("EquipmentNotFound");
+  return new Set(ids);
+}
+
 async function myReservations(userId, filters = {}) {
   const date = String(filters.date || "");
   const equipment = String(filters.equipment || "");
@@ -54,11 +64,11 @@ async function myReservations(userId, filters = {}) {
   if (date && !isIsoDate(date)) throw new ContractError("InvalidDate");
   if (status && !STATUSES.has(status)) throw new ContractError("UnknownStatus");
   const machines = await machinesById();
-  if (equipment && !machines.has(equipment)) throw new ContractError("EquipmentNotFound");
+  const ids = equipmentIds(equipment, machines);
   const owned = await storage.listOwnedReservations(userId);
   const reservations = (await withReports(owned
     .filter((item) => !date || item.date === date)
-    .filter((item) => !equipment || item.equipmentId === equipment)
+    .filter((item) => !ids || ids.has(item.equipmentId))
     .filter((item) => !status || item.status === status), machines))
     .sort((left, right) => `${left.date} ${left.start}`.localeCompare(`${right.date} ${right.start}`));
   return {
@@ -85,12 +95,12 @@ async function allReservations(filters = {}) {
   if (date && !isIsoDate(date)) throw new ContractError("InvalidDate");
   if (status && !STATUSES.has(status)) throw new ContractError("UnknownStatus");
   const machines = await machinesById();
-  if (equipment && !machines.has(equipment)) throw new ContractError("EquipmentNotFound");
+  const ids = equipmentIds(equipment, machines);
   const rows = await storage.listAllReservationRecords();
   const users = userChoices(await storage.listAccountNames(), rows);
   const filtered = rows
     .filter((item) => !date || item.date === date)
-    .filter((item) => !equipment || item.equipmentId === equipment)
+    .filter((item) => !ids || ids.has(item.equipmentId))
     .filter((item) => !status || item.status === status)
     .filter((item) => !user || item.userId === user);
   const names = new Map(filtered.map((item) => [item.id, item.user || "Unknown user"]));

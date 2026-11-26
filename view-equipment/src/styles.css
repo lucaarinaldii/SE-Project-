@@ -309,8 +309,13 @@ button, input, select { font: inherit; color: inherit; }
 .ticket-tabs { margin-top: var(--space-lg); }
 
 .ticket-controls {
-  grid-template-columns: repeat(2, minmax(180px, 280px));
+  grid-template-columns: 1fr;
   margin-top: var(--space-md);
+}
+
+#accountSearch {
+  width: 100%;
+  margin-top: var(--space-sm);
 }
 
 .field {
@@ -679,6 +684,182 @@ textarea {
 }
 
 .is-invalid { border-color: var(--color-destructive); }
+
+.level-track {
+  display: block;
+  width: 100%;
+  height: 8px;
+  margin-top: var(--space-sm);
+  overflow: hidden;
+  border-radius: 99px;
+  background: var(--color-muted);
+}
+
+.level-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-accent);
+}
+
+.level-fill.is-low { background: #d97706; }
+.level-fill.is-empty { background: var(--color-destructive); }
+
+.material-chart { width: 100%; }
+
+.xy-chart {
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
+}
+
+.xy-y {
+  position: relative;
+  height: 180px;
+  color: var(--color-muted-foreground);
+  font-size: 0.75rem;
+}
+
+.xy-y span {
+  position: absolute;
+  right: 0;
+  transform: translateY(50%);
+}
+
+.xy-plot {
+  position: relative;
+  height: 180px;
+  border-left: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+  background:
+    linear-gradient(to top, transparent 49%, var(--color-border) 50%, transparent 51%) center / 100% 50% no-repeat;
+}
+
+.xy-plot svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.xy-plot line {
+  stroke: var(--color-border);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.xy-plot polyline {
+  fill: none;
+  stroke: var(--color-primary);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.xy-mark {
+  position: absolute;
+  width: 0;
+  height: 0;
+  z-index: 1;
+}
+
+.xy-mark:has(.xy-pop:not([hidden])) { z-index: 3; }
+
+.xy-point {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  padding: 0;
+  border: 2px solid var(--color-primary);
+  border-radius: 50%;
+  background: #fff;
+  transform: translate(-50%, 50%);
+}
+
+.xy-point.is-selected { background: var(--color-primary); }
+
+.xy-pop {
+  position: absolute;
+  left: 0;
+  bottom: 18px;
+  transform: translateX(-50%);
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: var(--shadow-hover);
+  white-space: nowrap;
+}
+
+.xy-pop::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: #fff;
+}
+
+.xy-x {
+  position: relative;
+  height: 1.2em;
+  margin-top: 6px;
+  color: var(--color-muted-foreground);
+  font-size: 0.75rem;
+}
+
+.xy-last {
+  position: absolute;
+  right: 0;
+}
+
+.xy-guide-x,
+.xy-guide-y {
+  position: absolute;
+  z-index: 0;
+  background: #059669;
+  pointer-events: none;
+}
+
+.xy-guide-x {
+  left: 0;
+  height: 2px;
+  transform: translateY(50%);
+}
+
+.xy-guide-y {
+  bottom: 0;
+  width: 2px;
+  transform: translateX(-50%);
+}
+
+.xy-readout-y,
+.xy-readout-x {
+  color: #047857;
+  font-weight: 600;
+  background: #fff;
+}
+
+.xy-readout-x {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.xy-pop button {
+  font: inherit;
+  color: var(--color-primary);
+  background: none;
+  border: 0;
+  padding: 0;
+  text-decoration: underline;
+  cursor: pointer;
+}
 
 .profile-card {
   display: grid;

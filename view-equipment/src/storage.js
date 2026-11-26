@@ -61,6 +61,28 @@ const SCHEMA = [
   description text NOT NULL,
   status text NOT NULL CHECK (status IN ('Open', 'In progress', 'Maintenance requested', 'Resolved', 'Rejected')),
   created_at text NOT NULL
+)`,
+  `CREATE TABLE IF NOT EXISTS materials (
+  id text PRIMARY KEY,
+  equipment_id text NOT NULL UNIQUE REFERENCES equipment (id),
+  name text NOT NULL,
+  unit text NOT NULL,
+  quantity integer NOT NULL,
+  minimum integer NOT NULL,
+  capacity integer NOT NULL,
+  use_per_hour integer NOT NULL,
+  CHECK (quantity >= 0 AND quantity <= capacity),
+  CHECK (capacity > 0 AND use_per_hour > 0)
+)`,
+  `CREATE TABLE IF NOT EXISTS material_uses (
+  id text PRIMARY KEY,
+  material_id text NOT NULL REFERENCES materials (id),
+  reservation_id text NOT NULL UNIQUE REFERENCES reservations (id) ON DELETE CASCADE,
+  amount integer NOT NULL,
+  deducted integer NOT NULL,
+  stock_after integer,
+  created_at text NOT NULL,
+  CHECK (amount >= 0 AND deducted >= 0)
 )`
 ];
 
@@ -180,6 +202,129 @@ async function seedUsers(client, users) {
   }
 }
 
+async function seedMaterials(client, materials) {
+  for (const item of materials) {
+    await client.query(
+      `INSERT INTO materials (id, equipment_id, name, unit, quantity, minimum, capacity, use_per_hour)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+       ON CONFLICT (equipment_id) DO NOTHING`,
+      [item.id, item.equipmentId, item.name, item.unit, item.quantity, item.minimum, item.capacity, item.usePerHour]
+    );
+  }
+}
+
+function bookedHours(start, end) {
+  const span = minutes(end) - minutes(start);
+  if (span <= 0) return 0;
+  return Math.max(1, Math.round(span / 60));
+}
+
+async function applyMaterialUse(client, reservation) {
+  const found = await client.query(
+    `SELECT id, quantity, use_per_hour FROM materials WHERE equipment_id = $1 FOR UPDATE`,
+    [reservation.equipmentId]
+  );
+  if (found.rowCount === 0) return;
+  const material = found.rows[0];
+  const amount = material.use_per_hour * bookedHours(reservation.start, reservation.end);
+  if (amount <= 0) return;
+  const deducted = Math.min(material.quantity, amount);
+  const stockAfter = material.quantity - deducted;
+  const inserted = await client.query(
+    `INSERT INTO material_uses (id, material_id, reservation_id, amount, deducted, stock_after, created_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7)
+     ON CONFLICT (reservation_id) DO NOTHING
+     RETURNING id`,
+    [`use-${reservation.id}`, material.id, reservation.id, amount, deducted, stockAfter, new Date().toISOString()]
+  );
+  if (inserted.rowCount !== 1 || deducted === 0) return;
+  await client.query(`UPDATE materials SET quantity = quantity - $2 WHERE id = $1`, [material.id, deducted]);
+}
+
+async function releaseMaterialUse(client, reservationId) {
+  const removed = await client.query(
+    `DELETE FROM material_uses WHERE reservation_id = $1 RETURNING material_id, deducted`,
+    [reservationId]
+  );
+  for (const row of removed.rows) {
+    if (row.deducted <= 0) continue;
+    await client.query(
+      `UPDATE materials SET quantity = LEAST(capacity, quantity + $2) WHERE id = $1`,
+      [row.material_id, row.deducted]
+    );
+  }
+}
+
+async function backfillMaterialUses(client) {
+  const pending = await client.query(
+    `SELECT r.id, r.equipment_id, r.start_text, r.end_text
+     FROM reservations r
+     WHERE r.status <> 'Cancelled'
+       AND NOT EXISTS (SELECT 1 FROM material_uses u WHERE u.reservation_id = r.id)
+     ORDER BY r.reservation_date, r.start_minute, r.id`
+  );
+  for (const row of pending.rows) {
+    await applyMaterialUse(client, {
+      id: row.id,
+      equipmentId: row.equipment_id,
+      start: row.start_text,
+      end: row.end_text
+    });
+  }
+  await syncMaterialTickets(client);
+}
+
+async function backfillStockAfter(client) {
+  const materials = await client.query(`SELECT id, quantity FROM materials`);
+  for (const material of materials.rows) {
+    const uses = await client.query(
+      `SELECT u.id, u.deducted, u.stock_after
+       FROM material_uses u
+       JOIN reservations r ON r.id = u.reservation_id
+       WHERE u.material_id = $1 AND r.status <> 'Cancelled'
+       ORDER BY r.reservation_date DESC, r.start_minute DESC, u.id DESC`,
+      [material.id]
+    );
+    if (uses.rowCount === 0 || uses.rows.every((row) => row.stock_after !== null)) continue;
+    let level = material.quantity;
+    for (const row of uses.rows) {
+      if (row.stock_after === null) {
+        await client.query(`UPDATE material_uses SET stock_after = $2 WHERE id = $1`, [row.id, level]);
+      }
+      level += row.deducted;
+    }
+  }
+}
+
+async function syncMaterialTickets(client) {
+  const materials = await client.query(`SELECT equipment_id, quantity, minimum FROM materials`);
+  for (const row of materials.rows) {
+    const open = await client.query(
+      `SELECT id FROM reports
+       WHERE equipment_id = $1 AND issue_type = 'Low material' AND status NOT IN ('Resolved', 'Rejected')`,
+      [row.equipment_id]
+    );
+    const low = row.quantity <= row.minimum;
+    if (!low) {
+      for (const ticket of open.rows) {
+        await client.query(`UPDATE reports SET status = 'Resolved' WHERE id = $1`, [ticket.id]);
+      }
+      continue;
+    }
+    if (open.rowCount > 0) continue;
+    await client.query(
+      `INSERT INTO reports (id, reservation_id, equipment_id, user_id, issue_type, description, status, created_at)
+       VALUES ($1, NULL, $2, NULL, 'Low material', $3, 'Open', $4)`,
+      [
+        `rep-low-${row.equipment_id}`,
+        row.equipment_id,
+        `Material level ${row.quantity} is at or below the minimum ${row.minimum}.`,
+        new Date().toISOString()
+      ]
+    );
+  }
+}
+
 async function seedReservations(client, reservations) {
   for (const reservation of reservations) {
     await client.query(
@@ -212,6 +357,7 @@ async function prepareDatabase() {
       await client.query("ALTER TABLE equipment ADD COLUMN IF NOT EXISTS serial_number text NOT NULL DEFAULT ''");
       await client.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS suspended_until text NOT NULL DEFAULT ''");
       await client.query("ALTER TABLE equipment ADD COLUMN IF NOT EXISTS material_level integer NOT NULL DEFAULT 10");
+      await client.query("ALTER TABLE material_uses ADD COLUMN IF NOT EXISTS stock_after integer");
       await client.query("ALTER TABLE reports ALTER COLUMN reservation_id DROP NOT NULL");
       await client.query("ALTER TABLE reports ALTER COLUMN user_id DROP NOT NULL");
       await client.query(
@@ -219,11 +365,14 @@ async function prepareDatabase() {
          WHERE issue_type = 'Low material' AND status NOT IN ('Resolved', 'Rejected')`
       );
       await seedEquipment(client, await readJson("equipment.json"));
+      await seedMaterials(client, await readJson("materials.json"));
       await client.query("CREATE UNIQUE INDEX IF NOT EXISTS equipment_serial_number_key ON equipment (serial_number)");
       const userCount = await client.query("SELECT COUNT(*)::int AS n FROM users");
       if (userCount.rows[0].n === 0) await seedUsers(client, await readJson("users.json"));
       const reservationCount = await client.query("SELECT COUNT(*)::int AS n FROM reservations");
       if (reservationCount.rows[0].n === 0) await seedReservations(client, await readJson("reservations.json"));
+      await backfillMaterialUses(client);
+      await backfillStockAfter(client);
       await client.query("COMMIT");
     } catch (error) {
       try { await client.query("ROLLBACK"); } catch { /* the connection may already be closed */ }
@@ -311,6 +460,7 @@ async function blockMachineAndCancel(equipmentId, block, ids) {
           [equipmentId, ids]
         );
         cancelled = result.rows.map((row) => row.id);
+        for (const id of cancelled) await releaseMaterialUse(client, id);
       }
       const updated = await client.query(
         `UPDATE equipment
@@ -359,6 +509,7 @@ async function insertReservation(reservation) {
           reservation.status
         ]
       );
+      await applyMaterialUse(client, reservation);
       await client.query("COMMIT");
       return { id: reservation.id };
     } catch (error) {
@@ -374,7 +525,18 @@ async function insertReservation(reservation) {
 }
 
 async function deleteReservation(id) {
-  await query("DELETE FROM reservations WHERE id = $1", [id]);
+  return withClient(async (client) => {
+    try {
+      await client.query("BEGIN");
+      await releaseMaterialUse(client, id);
+      await client.query("DELETE FROM reservations WHERE id = $1", [id]);
+      await client.query("COMMIT");
+    } catch (error) {
+      try { await client.query("ROLLBACK"); } catch { /* the connection may already be closed */ }
+      console.error(error.message);
+      throw new ContractError("StorageUnavailable");
+    }
+  });
 }
 
 async function listAwaitingReservations() {
@@ -419,23 +581,45 @@ async function releaseReminder(id) {
 }
 
 async function cancelAwaiting(id) {
-  const result = await query(
-    `UPDATE reservations SET status = 'Cancelled'
-     WHERE id = $1 AND status = 'Awaiting confirmation'
-     RETURNING id`,
-    [id]
-  );
-  return result.rowCount === 1;
+  return withClient(async (client) => {
+    try {
+      await client.query("BEGIN");
+      const result = await client.query(
+        `UPDATE reservations SET status = 'Cancelled'
+         WHERE id = $1 AND status = 'Awaiting confirmation'
+         RETURNING id`,
+        [id]
+      );
+      if (result.rowCount === 1) await releaseMaterialUse(client, id);
+      await client.query("COMMIT");
+      return result.rowCount === 1;
+    } catch (error) {
+      try { await client.query("ROLLBACK"); } catch { /* the connection may already be closed */ }
+      console.error(error.message);
+      throw new ContractError("StorageUnavailable");
+    }
+  });
 }
 
 async function cancelOwned(userId, id) {
-  const result = await query(
-    `UPDATE reservations SET status = 'Cancelled'
-     WHERE id = $1 AND student_id = $2 AND status IN ('Awaiting confirmation', 'Confirmed')
-     RETURNING id`,
-    [id, userId]
-  );
-  return result.rowCount === 1;
+  return withClient(async (client) => {
+    try {
+      await client.query("BEGIN");
+      const result = await client.query(
+        `UPDATE reservations SET status = 'Cancelled'
+         WHERE id = $1 AND student_id = $2 AND status IN ('Awaiting confirmation', 'Confirmed')
+         RETURNING id`,
+        [id, userId]
+      );
+      if (result.rowCount === 1) await releaseMaterialUse(client, id);
+      await client.query("COMMIT");
+      return result.rowCount === 1;
+    } catch (error) {
+      try { await client.query("ROLLBACK"); } catch { /* the connection may already be closed */ }
+      console.error(error.message);
+      throw new ContractError("StorageUnavailable");
+    }
+  });
 }
 
 async function confirmAwaiting(userId, id) {
@@ -639,38 +823,64 @@ async function setUserSuspension(id, until) {
   });
 }
 
-async function listMaterialRecords() {
-  const result = await query(
-    `SELECT id, type, location, serial_number, material_level, min_threshold
-     FROM equipment ORDER BY position, id`
-  );
-  return result.rows.map(materialRecord);
-}
+const MATERIAL_SELECT = `
+  SELECT m.equipment_id, m.name, m.unit, m.quantity, m.minimum, m.capacity, m.use_per_hour,
+         e.type, e.location, e.serial_number
+  FROM materials m
+  JOIN equipment e ON e.id = m.equipment_id`;
 
 function materialRecord(row) {
   return {
-    id: row.id,
+    id: row.equipment_id,
     equipment: row.type,
     location: row.location,
     serial: row.serial_number ?? "",
-    quantity: row.material_level,
-    minimum: row.min_threshold ?? 0
+    name: row.name,
+    unit: row.unit,
+    quantity: row.quantity,
+    minimum: row.minimum,
+    capacity: row.capacity,
+    usePerHour: row.use_per_hour
   };
 }
 
+async function listMaterialRecords() {
+  const result = await query(`${MATERIAL_SELECT} ORDER BY e.position, m.equipment_id`);
+  return result.rows.map(materialRecord);
+}
+
 async function findMaterialRecord(id) {
-  const result = await query(
-    `SELECT id, type, location, serial_number, material_level, min_threshold
-     FROM equipment WHERE id = $1`,
-    [id]
-  );
+  const result = await query(`${MATERIAL_SELECT} WHERE m.equipment_id = $1`, [id]);
   if (result.rowCount === 0) throw new ContractError("EquipmentNotFound");
   return materialRecord(result.rows[0]);
 }
 
 async function setMaterialQuantity(id, quantity) {
-  const result = await query(`UPDATE equipment SET material_level = $2 WHERE id = $1 RETURNING id`, [id, quantity]);
+  const result = await query(
+    `UPDATE materials SET quantity = $2 WHERE equipment_id = $1 AND $2 <= capacity RETURNING id`,
+    [id, quantity]
+  );
   if (result.rowCount !== 1) throw new ContractError("EquipmentNotFound");
+}
+
+async function listMaterialUses() {
+  const result = await query(
+    `SELECT u.reservation_id, u.amount, u.stock_after, m.equipment_id, r.reservation_date, r.start_text, r.end_text
+     FROM material_uses u
+     JOIN materials m ON m.id = u.material_id
+     JOIN reservations r ON r.id = u.reservation_id
+     WHERE r.status <> 'Cancelled'
+     ORDER BY r.reservation_date, r.start_minute, u.reservation_id`
+  );
+  return result.rows.map((row) => ({
+    equipmentId: row.equipment_id,
+    reservationId: row.reservation_id,
+    amount: row.amount,
+    stockAfter: row.stock_after,
+    date: row.reservation_date,
+    start: row.start_text,
+    end: row.end_text
+  }));
 }
 
 async function listOpenMaterialTickets() {
@@ -733,6 +943,7 @@ module.exports = {
   listMaterialRecords,
   findMaterialRecord,
   setMaterialQuantity,
+  listMaterialUses,
   listOpenMaterialTickets,
   insertMaterialTicket
 };
