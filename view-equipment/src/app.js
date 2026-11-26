@@ -503,6 +503,19 @@ function slotLabel(state) {
   return "Free";
 }
 
+function machineGlyph(type) {
+  const kind = String(type || "").toLowerCase();
+  let body = '<rect x="3" y="5" width="18" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"></rect><path d="M8 21h8M12 17v4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path>';
+  if (kind.includes("3d")) {
+    body = '<path d="M5 8.5 12 5l7 3.5v7L12 19l-7-3.5v-7Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"></path><path d="M12 12.2 19 8.7M12 12.2V19M12 12.2 5 8.7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"></path>';
+  } else if (kind.includes("laser") || kind.includes("cut")) {
+    body = '<path d="M4 16.5h16M7 16.5V9h10v7.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path><path d="M12 9V5M9.5 6.5 12 5l2.5 1.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path>';
+  } else if (kind.includes("electron")) {
+    body = '<rect x="4" y="7" width="16" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"></rect><path d="M8 7V4.5M12 7V4.5M16 7V4.5M8 19.5V17M12 19.5V17M16 19.5V17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path>';
+  }
+  return `<span class="machine-glyph" aria-hidden="true"><svg viewBox="0 0 24 24">${body}</svg></span>`;
+}
+
 function mark(kind) {
   if (kind === "open" || kind === "free") {
     return '<svg class="mark" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="4" fill="currentColor"></circle></svg>';
@@ -822,15 +835,20 @@ async function loadCatalogue() {
   list.innerHTML = data.equipment.map((item) => {
     const open = item.status !== "blocked";
     return `
-      <button class="card" type="button" data-id="${item.id}">
-        <span class="card-top">
-          <span class="card-title">${escapeHtml(item.type)}</span>
-          <span class="badge ${item.status}">${mark(open ? "open" : "blocked")}${open ? "Open" : "Blocked"}</span>
+    <button class="card" type="button" data-id="${item.id}">
+        <span class="card-lead">
+          ${machineGlyph(item.type)}
+          <span class="card-copy">
+            <span class="card-top">
+              <span class="card-title">${escapeHtml(item.type)}</span>
+              <span class="badge ${item.status}">${mark(open ? "open" : "blocked")}${open ? "Open" : "Blocked"}</span>
+            </span>
+            <span class="card-location">${escapeHtml(item.serial)}</span>
+            <span class="card-location">${escapeHtml(item.location)}</span>
+            <span class="card-status">${statusLabel(item)}</span>
+          </span>
         </span>
-        <span class="card-location">${escapeHtml(item.serial)}</span>
-        <span class="card-location">${escapeHtml(item.location)}</span>
-        <span class="card-status">${statusLabel(item)}</span>
-      </button>
+    </button>
     `;
   }).join("");
 }
@@ -947,7 +965,7 @@ function showSignInTab(signIn) {
   document.querySelector("#showRegister").classList.toggle("is-selected", !signIn);
   document.querySelector("#showSignIn").setAttribute("aria-selected", String(signIn));
   document.querySelector("#showRegister").setAttribute("aria-selected", String(!signIn));
-  document.querySelector("#auth h1").textContent = signIn ? "Sign in" : "Create account";
+  document.querySelector("#auth .auth-card h1").textContent = signIn ? "Sign in" : "Create account";
   setBanner(authMessage, "", "");
 }
 
@@ -1319,13 +1337,18 @@ function renderStaff() {
   const visible = visibleStaff();
   staffList.innerHTML = visible.map((item) => `
     <button class="card${item.id === selected ? " is-selected" : ""}" type="button" data-staff="${escapeHtml(item.id)}" ${item.id === selected ? "aria-current=\"true\"" : ""}>
-      <span class="card-top">
-        <span class="card-title">${escapeHtml(item.type)}</span>
-        ${staffBadge(item)}
+      <span class="card-lead">
+        ${machineGlyph(item.type)}
+        <span class="card-copy">
+          <span class="card-top">
+            <span class="card-title">${escapeHtml(item.type)}</span>
+            ${staffBadge(item)}
+          </span>
+          <span class="card-location">${escapeHtml(item.serial)}</span>
+          <span class="card-location">${escapeHtml(item.location)}</span>
+          <span class="card-status">${escapeHtml(statusLabel(item))}</span>
+        </span>
       </span>
-      <span class="card-location">${escapeHtml(item.serial)}</span>
-      <span class="card-location">${escapeHtml(item.location)}</span>
-      <span class="card-status">${escapeHtml(statusLabel(item))}</span>
     </button>
   `).join("");
   const current = visible.find((item) => item.id === selected);

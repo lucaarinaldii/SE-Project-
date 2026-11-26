@@ -6,11 +6,22 @@
     <title>Makerspace equipment</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/styles.css">
   </head>
   <body>
     <section id="auth" class="auth">
+      <div class="auth-stage">
+      <aside class="auth-aside">
+        <p class="auth-wordmark"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32"><rect x="4" y="7" width="24" height="14" rx="3" fill="none" stroke="currentColor" stroke-width="2"></rect><path d="M11 25h10M16 21v4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path></svg></span>View Equipment</p>
+        <p class="auth-aside-title">Book the campus workshop.</p>
+        <p class="auth-aside-copy">See which machines are open, then take a free slot on the day you need.</p>
+        <ul class="auth-points">
+          <li>Printers, cutters, and electronics benches in one list</li>
+          <li>A week of slots, with the next free time nearby</li>
+          <li>Staff can hold a machine, restock, and follow tickets</li>
+        </ul>
+      </aside>
       <div class="auth-card">
         <p class="eyebrow">Campus makerspace</p>
         <h1>Sign in</h1>
@@ -39,10 +50,12 @@
         </form>
         <p class="note">Existing account: student@university.edu, password makerspace. Staff account: staff@university.edu, password makerspace.</p>
       </div>
+      </div>
     </section>
     <main id="appShell" class="app" hidden>
       <header class="topbar">
         <div class="topbar-main">
+          <p class="brand-lockup"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32"><rect x="4" y="7" width="24" height="14" rx="3" fill="none" stroke="currentColor" stroke-width="2"></rect><path d="M11 25h10M16 21v4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path></svg></span>View Equipment</p>
           <button id="backToChoices" class="back-link" type="button" hidden>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6.5 9 12l5.5 5.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
             Back to choices
@@ -64,21 +77,21 @@
 
       <div id="chooseView">
       <div id="blockNotices" class="block-notices" hidden></div>
-      <section class="controls" aria-label="Catalogue controls">
-        <div class="field">
-          <label for="type">Type</label>
-          <select id="type">
-            <option value="">All types</option>
-            <option value="3D-принтер">3D printer</option>
-            <option value="лазерный резак">Laser cutter</option>
-            <option value="электроника">Electronics</option>
-          </select>
-        </div>
-      </section>
-
       <p id="message" class="banner is-blocked" role="status" hidden></p>
 
       <div class="workspace">
+        <div class="stack">
+        <section class="controls" aria-label="Catalogue controls">
+          <div class="field">
+            <label for="type">Type</label>
+            <select id="type">
+              <option value="">All types</option>
+              <option value="3D-принтер">3D printer</option>
+              <option value="лазерный резак">Laser cutter</option>
+              <option value="электроника">Electronics</option>
+            </select>
+          </div>
+        </section>
         <section class="catalogue" aria-label="Machines">
           <div class="section-head">
             <h2>Your choices</h2>
@@ -86,6 +99,7 @@
           </div>
           <div id="list" class="list"></div>
         </section>
+        </div>
         <article id="details" class="details">
           <div class="empty">
             <p class="eyebrow">Machine</p>
